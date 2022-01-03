@@ -19,6 +19,12 @@ def default_indexer_api_token():
     return ''
 
 # helper function to compile program source
+def compile_smart_signature(client : algod.AlgodClient, source_code):
+    compile_response = client.compile(source_code)
+    return compile_response['result'], compile_response['hash']
+
+
+# helper function to compile program source
 def compile_program(client : algod.AlgodClient, source_code):
     compile_response = client.compile(source_code)
     return base64.b64decode(compile_response['result'])

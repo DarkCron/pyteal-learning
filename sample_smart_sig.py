@@ -6,7 +6,7 @@ from algosdk.future import transaction
 from algosdk.v2client import algod, indexer
 import base64
 import time
-from utils.tealhelpher import wait_for_confirmation, compile_program
+from utils.tealhelpher import *
 
 """Basic Donation Escrow"""
 def donation_escrow(benefactor):
@@ -47,9 +47,12 @@ def lsig_payment_txn(escrowProg, escrow_address, amt, rcv, algod_client : algod.
     pmtx = wait_for_confirmation(algod_client, tx_id, 10)
     return pmtx 
 
+benefactor_mnemonic = 'soup kind never flavor anger horse family asthma hollow best purity slight lift inmate later left smoke stamp basic syrup relief pencil point abstract fiscal'
+sender_mnemonic = 'girl goddess high potato mad nominee now wise lesson ugly undo always infant ordinary snow embrace you nephew ball clinic coral brave diesel above into'
+
 def main() :
     # initialize an algodClient
-    algod_client = algod.AlgodClient(algod_token, algod_address)
+    algod_client = algod.AlgodClient(default_algod_api_token(), default_algod_api_address(), headers={'User-Agent': 'py-algorand-sdk'})
 
     # define private keys
     receiver_public_key = mnemonic.to_public_key(benefactor_mnemonic)
@@ -58,7 +61,7 @@ def main() :
     print("Compiling Donation Smart Signature......")
 
     stateless_program_teal = donation_escrow(receiver_public_key)
-    escrow_result, escrow_address= compile_program(algod_client, stateless_program_teal)
+    escrow_result, escrow_address= compile_smart_signature(algod_client, stateless_program_teal)
 
     print("Program:", escrow_result)
     print("hash: ", escrow_address)
@@ -74,5 +77,8 @@ def main() :
     print("Withdraw from Donation Smart Signature......")
 
     # Withdraws 1 ALGO from smart signature using logic signature.
-    withdrawal_amt = 1000000
+    withdrawal_amt = 2001000 - 1000
     lsig_payment_txn(escrow_result, escrow_address, withdrawal_amt, receiver_public_key, algod_client)
+
+if __name__ == "__main__":
+    main()
