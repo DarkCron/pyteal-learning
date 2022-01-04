@@ -3,7 +3,7 @@ from pyteal import *
 from algosdk import account, mnemonic
 from algosdk.future import transaction
 from algosdk.v2client import algod, indexer
-from utils.tealhelpher import create_app, update_app, read_global_state, get_private_key_from_mnemonic
+from utils.tealhelpher import create_app, delete_app, update_app, read_global_state, get_private_key_from_mnemonic
 import base64
 import time
 
@@ -18,7 +18,7 @@ def approval_program():
        App.globalPut(Bytes("Asa1Prec"), Int(0)),
        App.globalPut(Bytes("Asa2Prec"), Int(0)),
        App.globalPut(Bytes("CreatorId"), Int(11)),
-       App.globalPut(Bytes("EscAddr"), Int(0)),
+       App.globalPut(Bytes("EscAddr"), Txn.sender()),
        App.globalPut(Bytes("bDataSet"), Int(0)),
        Return(Int(1))
    ])
@@ -32,6 +32,7 @@ def approval_program():
 
    dataSet = Seq([
        scratchCount.store(App.globalGet(Bytes("bDataSet"))),
+       App.globalPut(Bytes("EscAddr"), Txn.sender()),
        App.globalPut(Bytes("bDataSet"), scratchCount.load() + Int(1)),
        Return(Int(1))
    ])
@@ -53,6 +54,11 @@ def approval_program():
    ])
 
    handle_noop = Cond(
+       [And(
+           Global.group_size() == Int(1),  # Make sure the transaction isn't grouped
+           App.globalGet(Bytes("bDataSet")) == Int(0),
+           Txn.application_args[0] == Bytes("SetData")
+       ), dataSet],
        [And(
            Global.group_size() == Int(1),  # Make sure the transaction isn't grouped
            Txn.application_args[0] == Bytes("Add")
@@ -93,7 +99,7 @@ algod_indexer_address = 'https://algoindexer.testnet.algoexplorerapi.io' #"https
 algod_indexer_token = ""
 
 creator_mnemonic = 'soup kind never flavor anger horse family asthma hollow best purity slight lift inmate later left smoke stamp basic syrup relief pencil point abstract fiscal'
-app_id = '56352533'
+app_id = 56481777
 
 def main() :
     # initialize an algodClient
@@ -104,9 +110,9 @@ def main() :
 
     # declare application state storage (immutable)
     local_ints = 0
-    local_bytes = 0
+    local_bytes = 1
     global_ints = 9 
-    global_bytes = 0
+    global_bytes = 1
     global_schema = transaction.StateSchema(global_ints, global_bytes)
     local_schema = transaction.StateSchema(local_ints, local_bytes)
 
@@ -129,11 +135,10 @@ def main() :
     print("--------------------------------------------")
     print("Updating application......")
     
-    app_id = 56356672
-
     # create new application
-    #app_id = create_app(algod_client, algod_indexer_client, creator_private_key, approval_program_compiled, clear_state_program_compiled, global_schema, local_schema)
-    app_id = update_app(algod_client, algod_indexer_client, app_id ,creator_private_key, approval_program_compiled, clear_state_program_compiled)
+    app_id = create_app(algod_client, algod_indexer_client, creator_private_key, approval_program_compiled, clear_state_program_compiled, global_schema, local_schema)
+    #app_id = update_app(algod_client, algod_indexer_client, app_id ,creator_private_key, approval_program_compiled, clear_state_program_compiled)
+    #delete_app(algod_client, algod_indexer_client, app_id, creator_private_key)
 
     # read global state of application
     print("Global state:", read_global_state(algod_indexer_client ,account.address_from_private_key(creator_private_key), app_id))

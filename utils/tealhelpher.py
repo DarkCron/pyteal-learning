@@ -1,10 +1,13 @@
 from algosdk import future
+from algosdk.encoding import decode_address, encode_address
 from pyteal import *
 from algosdk import account, mnemonic
 from algosdk.future import transaction
 from algosdk.v2client import algod, indexer
 import base64
 import time
+
+from pyteal.ast import addr
 
 def default_algod_api_address():
     return 'https://node.testnet.algoexplorerapi.io'
@@ -76,6 +79,8 @@ def format_state(state):
             # byte string
             if formatted_key == 'voted':
                 formatted_value = base64.b64decode(value['bytes']).decode('utf-8')
+            elif formatted_key == 'EscAddr':
+                 formatted_value = encode_address(base64.b64decode(value['bytes']))
             else:
                 formatted_value = value['bytes']
             formatted[formatted_key] = formatted_value
@@ -93,6 +98,29 @@ def read_global_state(client :indexer.IndexerClient, addr, app_id):
             return format_state(app['params']['global-state'])
     return {}
 
+# call application
+def call_app(client :algod.AlgodClient, private_key, index, app_args) : 
+    # declare sender
+    sender = account.address_from_private_key(private_key)
+
+    # get node suggested parameters
+    params = client.suggested_params()
+
+    # create unsigned transaction
+    txn = transaction.ApplicationNoOpTxn(sender, params, index, app_args)
+
+    # sign transaction
+    signed_txn = txn.sign(private_key)
+    t = Txn.sender()
+    tx_id = signed_txn.transaction.get_txid()
+
+    # send transaction
+    client.send_transactions([signed_txn])
+
+    # await confirmation
+    wait_for_confirmation(client, tx_id, 5)
+
+    print("Application called")
 
 # create new application
 def create_app(client : algod.AlgodClient, indexer: indexer.IndexerClient, private_key, approval_program, clear_program, global_schema, local_schema):
@@ -137,7 +165,7 @@ def create_app(client : algod.AlgodClient, indexer: indexer.IndexerClient, priva
     return app_id
 
 
-# create new application
+# update application
 def update_app(client : algod.AlgodClient, indexer : indexer.IndexerClient, appid, private_key, approval_program, clear_program):
     # define sender as creator
     sender = account.address_from_private_key(private_key)
@@ -172,7 +200,45 @@ def update_app(client : algod.AlgodClient, indexer : indexer.IndexerClient, appi
         finally:
             time.sleep(1)
 
-    app_id = transaction_response['transaction']['created-application-index']
-    print("Created new app-id:", app_id)
+    print("updated app-id:", appid)
 
-    return app_id
+    return appid
+
+# delete application
+def delete_app(client : algod.AlgodClient, indexer : indexer.IndexerClient, appid, private_key):
+    # define sender as creator
+    sender = account.address_from_private_key(private_key)
+
+    # declare on_complete as NoOp
+    on_complete = transaction.OnComplete.NoOpOC.real
+
+    # get node suggested parameters
+    params = client.suggested_params()
+
+    # create unsigned transaction
+    txn = transaction.ApplicationDeleteTxn(sender, params, appid)
+
+    # sign transaction
+    signed_txn = txn.sign(private_key)
+    tx_id = signed_txn.transaction.get_txid()
+
+    # send transaction
+    client.send_transactions([signed_txn])
+
+    # await confirmation
+    wait_for_confirmation(client, tx_id, 5)
+
+    #!!!!!!!! Must be gotten from indexer 
+    # display results
+    while(True):
+        try:
+            transaction_response = indexer.transaction(tx_id)
+            break
+        except Exception:
+            pass
+        finally:
+            time.sleep(1)
+
+    print("deleted app-id:", appid)
+
+    return appid
