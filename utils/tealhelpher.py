@@ -135,3 +135,44 @@ def create_app(client : algod.AlgodClient, indexer: indexer.IndexerClient, priva
     print("Created new app-id:", app_id)
 
     return app_id
+
+
+# create new application
+def update_app(client : algod.AlgodClient, indexer : indexer.IndexerClient, appid, private_key, approval_program, clear_program):
+    # define sender as creator
+    sender = account.address_from_private_key(private_key)
+
+    # declare on_complete as NoOp
+    on_complete = transaction.OnComplete.NoOpOC.real
+
+    # get node suggested parameters
+    params = client.suggested_params()
+
+    # create unsigned transaction
+    txn = transaction.ApplicationUpdateTxn(sender, params, appid, approval_program, clear_program)
+
+    # sign transaction
+    signed_txn = txn.sign(private_key)
+    tx_id = signed_txn.transaction.get_txid()
+
+    # send transaction
+    client.send_transactions([signed_txn])
+
+    # await confirmation
+    wait_for_confirmation(client, tx_id, 5)
+
+    #!!!!!!!! Must be gotten from indexer 
+    # display results
+    while(True):
+        try:
+            transaction_response = indexer.transaction(tx_id)
+            break
+        except Exception:
+            pass
+        finally:
+            time.sleep(1)
+
+    app_id = transaction_response['transaction']['created-application-index']
+    print("Created new app-id:", app_id)
+
+    return app_id
