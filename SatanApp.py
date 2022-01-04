@@ -3,7 +3,7 @@ from pyteal import *
 from algosdk import account, mnemonic
 from algosdk.future import transaction
 from algosdk.v2client import algod, indexer
-from utils.tealhelpher import create_app, delete_app, update_app, read_global_state, get_private_key_from_mnemonic
+from utils.tealhelpher import create_app, delete_app, update_app, read_global_state, get_private_key_from_mnemonic, intToBytes
 import base64
 import time
 
@@ -131,6 +131,23 @@ def main() :
 
     # compile program to binary
     clear_state_program_compiled, _ = compile_program(algod_client, clear_state_program_teal)
+
+
+    print("---------Generating args-----------")
+
+    # configure registration and voting period
+    Asa1ID = 0
+    Asa2ID = 0
+    Asa1Prec = 0
+    Asa2Prec = 0
+
+    # create list of bytes for app args
+    app_args = [
+        intToBytes(Asa1ID),
+        intToBytes(Asa2ID),
+        intToBytes(Asa1Prec),
+        intToBytes(Asa2Prec),
+    ]
 
     print("--------------------------------------------")
     print("Updating application......")

@@ -9,6 +9,10 @@ import time
 
 from pyteal.ast import addr
 
+# convert 64 bit integer i to byte string
+def intToBytes(i):
+    return i.to_bytes(8, "big")
+
 def default_algod_api_address():
     return 'https://node.testnet.algoexplorerapi.io'
 
