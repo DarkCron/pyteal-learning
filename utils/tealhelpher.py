@@ -9,6 +9,62 @@ import time
 
 from pyteal.ast import addr
 
+def generate_algorand_keypair():
+    private_key, address = account.generate_account()
+    print("My address: {}".format(address))
+    print("My passphrase: {}".format(mnemonic.from_private_key(private_key)))
+    return private_key, address
+
+def fee_payment_provider(client : algod.AlgodClient, indexer : indexer.IndexerClient, amt : int, payer_key, receiver, allowFirstTxs : bool = False):
+    isFirstTx = False
+
+    try:
+        indexer.account_info(receiver)
+    except Exception:
+        isFirstTx = True
+        if not allowFirstTxs:
+            raise Exception('First tx not allowed here')
+        else:
+            amt += 100000 #min amount to create account
+
+    # declare sender
+    sender = account.address_from_private_key(payer_key)
+
+    # get node suggested parameters
+    params = client.suggested_params()
+
+    # create unsigned transaction
+    txn = transaction.PaymentTxn(sender, params, receiver, amt)
+
+    # sign transaction
+    signed_txn = txn.sign(payer_key)
+    tx_id = signed_txn.transaction.get_txid()
+
+    # send transaction
+    client.send_transactions([signed_txn])
+
+    # await confirmation
+    wait_for_confirmation(client, tx_id, 5)
+
+    #!!!!!!!! Must be gotten from indexer 
+    # display results
+    while(True):
+        try:
+            transaction_response = indexer.transaction(tx_id)
+            break
+        except Exception:
+            pass
+        finally:
+            time.sleep(0.1)
+
+    print("Payment confirmed!")
+    return
+
+def make_sure_act_has_min_cost_plus(indexer : indexer.IndexerClient, amt : int, receiver, amt_for_tx_fees : int):
+    info = indexer.account_info(receiver)
+    act_amt = info['account']['amount']
+    return amt + amt_for_tx_fees - act_amt
+
 # convert 64 bit integer i to byte string
 def intToBytes(i):
     return i.to_bytes(8, "big")
@@ -84,7 +140,9 @@ def format_state(state):
             if formatted_key == 'voted':
                 formatted_value = base64.b64decode(value['bytes']).decode('utf-8')
             elif formatted_key == 'EscAddr':
-                 formatted_value = encode_address(base64.b64decode(value['bytes']))
+                formatted_value = value['bytes']
+                #formatted_value = base64.b64decode(value['bytes']).decode('utf-8')
+                #formatted_value = encode_address(base64.b64decode(value['bytes']))
             else:
                 formatted_value = value['bytes']
             formatted[formatted_key] = formatted_value
@@ -127,7 +185,48 @@ def call_app(client :algod.AlgodClient, private_key, index, app_args) :
     print("Application called")
 
 # create new application
-def create_app(client : algod.AlgodClient, indexer: indexer.IndexerClient, private_key, approval_program, clear_program, global_schema, local_schema):
+def create_app(client : algod.AlgodClient, indexer: indexer.IndexerClient, private_key, approval_program, clear_program, global_schema, local_schema, app_args = []):
+    # define sender as creator
+    sender = account.address_from_private_key(private_key)
+
+    # declare on_complete as NoOp
+    on_complete = transaction.OnComplete.NoOpOC.real
+
+    # get node suggested parameters
+    params = client.suggested_params()
+
+    # create unsigned transaction
+    txn = transaction.ApplicationCreateTxn(sender, params, on_complete, \
+                                            approval_program, clear_program, \
+                                            global_schema, local_schema, app_args)
+    # sign transaction
+    signed_txn = txn.sign(private_key)
+    tx_id = signed_txn.transaction.get_txid()
+
+    # send transaction
+    client.send_transactions([signed_txn])
+
+    # await confirmation
+    wait_for_confirmation(client, tx_id, 5)
+
+    #!!!!!!!! Must be gotten from indexer 
+    # display results
+    while(True):
+        try:
+            transaction_response = indexer.transaction(tx_id)
+            break
+        except Exception:
+            pass
+        finally:
+            time.sleep(0.1)
+
+    app_id = transaction_response['transaction']['created-application-index']
+    print("Created new app-id:", app_id)
+
+    return app_id
+
+# create new application
+def create_app_grouped(client : algod.AlgodClient, indexer: indexer.IndexerClient, private_key, approval_program, clear_program, global_schema, local_schema):
     # define sender as creator
     sender = account.address_from_private_key(private_key)
 
@@ -141,6 +240,13 @@ def create_app(client : algod.AlgodClient, indexer: indexer.IndexerClient, priva
     txn = transaction.ApplicationCreateTxn(sender, params, on_complete, \
                                             approval_program, clear_program, \
                                             global_schema, local_schema)
+
+    ########### CALL APP PAIRED? #################
+    # create unsigned transaction
+    txn2 = transaction.ApplicationNoOpTxn(sender, params, _, [])
+    # get group id and assign it to transactions
+    gid = transaction.calculate_group_id([txn, txn2])
+
 
     # sign transaction
     signed_txn = txn.sign(private_key)
@@ -167,7 +273,6 @@ def create_app(client : algod.AlgodClient, indexer: indexer.IndexerClient, priva
     print("Created new app-id:", app_id)
 
     return app_id
-
 
 # update application
 def update_app(client : algod.AlgodClient, indexer : indexer.IndexerClient, appid, private_key, approval_program, clear_program):
