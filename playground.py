@@ -8,6 +8,7 @@ from utils.tealhelpher import *
 from SatanApp import app_ready_to_go, min_cost_for_app
 import base64
 import time
+import hashlib
 
 asaId1 = 56335894
 asaId2 = 56335957
@@ -29,6 +30,9 @@ def main():
     
 
     temp_private_key = get_private_key_from_mnemonic(temp_mnem)
+    h = hashlib.sha256(temp_private_key.encode())
+    hhh = h.hexdigest().encode()
+    ha = Sha512_256(Bytes(temp_private_key))
     payer_private_key = get_private_key_from_mnemonic(payer_mnem)
     payer_address = account.address_from_private_key(payer_private_key)
 

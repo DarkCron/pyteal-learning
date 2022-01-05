@@ -8,6 +8,7 @@ from utils.tealhelpher import create_app, delete_app, update_app, read_global_st
 import base64
 import time
 import random
+import hashlib
 
 def Satansbank(creator_addr : str):
     """Only allow receiver to withdraw funds from this contract account.
@@ -34,10 +35,10 @@ def Satansbank(creator_addr : str):
 def approval_program():
    # Mode.Application specifies that this is a smart contract
    handle_creation = Seq([
-       Assert(Txn.application_args.length() == Int(5)),
+       Assert(Txn.application_args.length() == Int(6)),
        App.globalPut(Bytes("Asa1ID"), Btoi(Txn.application_args[0])),
        App.globalPut(Bytes("Asa2ID"), Btoi(Txn.application_args[1])),
-       App.globalPut(Bytes("Asa1Amt"), Int(0)),
+       App.globalPut(Bytes("Asa1Amt"), Sha512_256(Txn.application_args[5])),
        App.globalPut(Bytes("Asa2Amt"), Int(0)),
        App.globalPut(Bytes("Asa1Prec"), Btoi(Txn.application_args[2])),
        App.globalPut(Bytes("Asa2Prec"), Btoi(Txn.application_args[3])),
@@ -84,7 +85,17 @@ def approval_program():
        Return(Int(1))
    ])
 
+   InnerTxnBuilder().SetField()
+   itxn = Seq([
+       InnerTxnBuilder().Begin(), 
+       Return(Int(0))
+    ])
+
    handle_noop = Cond(
+       [And(
+           Global.group_size() == Int(1),  # Make sure the transaction isn't grouped
+           Txn.application_args[0] == Bytes("Tixn")
+       ), itxn],
        [And(
            Global.group_size() == Int(1),  # Make sure the transaction isn't grouped
            App.globalGet(Bytes("bDataSet")) == Int(0),
@@ -147,7 +158,7 @@ def app_schemas():
 
     return global_schema, local_schema
 
-def app_ready_to_go(algod : algod.AlgodClient, indexer : indexer.IndexerClient, creator_pk, source_addr):
+def app_ready_to_go(algod : algod.AlgodClient, indexer : indexer.IndexerClient, creator_pk :str, source_addr):
     """A complete and ready to go compilation of the Satan app
 
     Args:
@@ -196,7 +207,8 @@ def app_ready_to_go(algod : algod.AlgodClient, indexer : indexer.IndexerClient, 
         intToBytes(Asa2ID),
         intToBytes(Asa1Prec),
         intToBytes(Asa2Prec),
-        source_addr
+        source_addr,
+        hashlib.sha256(creator_pk.encode()).hexdigest().encode()
     ]
 
 

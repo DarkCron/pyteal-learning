@@ -314,6 +314,45 @@ def update_app(client : algod.AlgodClient, indexer : indexer.IndexerClient, appi
     return appid
 
 # delete application
+def close_out_app(client : algod.AlgodClient, indexer : indexer.IndexerClient, appid, private_key):
+    # define sender as creator
+    sender = account.address_from_private_key(private_key)
+
+    # declare on_complete as NoOp
+    on_complete = transaction.OnComplete.NoOpOC.real
+
+    # get node suggested parameters
+    params = client.suggested_params()
+
+    # create unsigned transaction
+    txn = transaction.AssetCloseOutTxn(sender, params, appid, 0)
+    
+    # sign transaction
+    signed_txn = txn.sign(private_key)
+    tx_id = signed_txn.transaction.get_txid()
+
+    # send transaction
+    client.send_transactions([signed_txn])
+
+    # await confirmation
+    wait_for_confirmation(client, tx_id, 5)
+
+    #!!!!!!!! Must be gotten from indexer 
+    # display results
+    while(True):
+        try:
+            transaction_response = indexer.transaction(tx_id)
+            break
+        except Exception:
+            pass
+        finally:
+            time.sleep(1)
+
+    print("deleted app-id:", appid)
+
+    return appid
+
+# delete application
 def delete_app(client : algod.AlgodClient, indexer : indexer.IndexerClient, appid, private_key):
     # define sender as creator
     sender = account.address_from_private_key(private_key)
@@ -326,7 +365,7 @@ def delete_app(client : algod.AlgodClient, indexer : indexer.IndexerClient, appi
 
     # create unsigned transaction
     txn = transaction.ApplicationDeleteTxn(sender, params, appid)
-
+    
     # sign transaction
     signed_txn = txn.sign(private_key)
     tx_id = signed_txn.transaction.get_txid()
