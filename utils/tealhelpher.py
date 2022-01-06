@@ -4,6 +4,7 @@ from pyteal import *
 from algosdk import account, mnemonic
 from algosdk.future import transaction
 from algosdk.v2client import algod, indexer
+from typing import List
 import base64
 import time
 
@@ -63,7 +64,7 @@ def fee_payment_provider(client : algod.AlgodClient, indexer : indexer.IndexerCl
 def make_sure_act_has_min_cost_plus(indexer : indexer.IndexerClient, amt : int, receiver, amt_for_tx_fees : int):
     info = indexer.account_info(receiver)
     act_amt = info['account']['amount']
-    return amt + amt_for_tx_fees - act_amt
+    return amt + amt_for_tx_fees - act_amt + 4000
 
 # convert 64 bit integer i to byte string
 def intToBytes(i):
@@ -169,7 +170,7 @@ def call_app(client :algod.AlgodClient, private_key, index, app_args) :
     params = client.suggested_params()
 
     # create unsigned transaction
-    txn = transaction.ApplicationNoOpTxn(sender, params, index, app_args)
+    txn = transaction.ApplicationNoOpTxn(sender, params, index, app_args, foreign_assets=[56335894])
 
     # sign transaction
     signed_txn = txn.sign(private_key)
@@ -198,7 +199,7 @@ def create_app(client : algod.AlgodClient, indexer: indexer.IndexerClient, priva
     # create unsigned transaction
     txn = transaction.ApplicationCreateTxn(sender, params, on_complete, \
                                             approval_program, clear_program, \
-                                            global_schema, local_schema, app_args)
+                                            global_schema, local_schema, app_args, foreign_assets=[56335894])
     # sign transaction
     signed_txn = txn.sign(private_key)
     tx_id = signed_txn.transaction.get_txid()
@@ -219,55 +220,6 @@ def create_app(client : algod.AlgodClient, indexer: indexer.IndexerClient, priva
             pass
         finally:
             time.sleep(0.1)
-
-    app_id = transaction_response['transaction']['created-application-index']
-    print("Created new app-id:", app_id)
-
-    return app_id
-
-# create new application
-def create_app_grouped(client : algod.AlgodClient, indexer: indexer.IndexerClient, private_key, approval_program, clear_program, global_schema, local_schema):
-    # define sender as creator
-    sender = account.address_from_private_key(private_key)
-
-    # declare on_complete as NoOp
-    on_complete = transaction.OnComplete.NoOpOC.real
-
-    # get node suggested parameters
-    params = client.suggested_params()
-
-    # create unsigned transaction
-    txn = transaction.ApplicationCreateTxn(sender, params, on_complete, \
-                                            approval_program, clear_program, \
-                                            global_schema, local_schema)
-
-    ########### CALL APP PAIRED? #################
-    # create unsigned transaction
-    txn2 = transaction.ApplicationNoOpTxn(sender, params, _, [])
-    # get group id and assign it to transactions
-    gid = transaction.calculate_group_id([txn, txn2])
-
-
-    # sign transaction
-    signed_txn = txn.sign(private_key)
-    tx_id = signed_txn.transaction.get_txid()
-
-    # send transaction
-    client.send_transactions([signed_txn])
-
-    # await confirmation
-    wait_for_confirmation(client, tx_id, 5)
-
-    #!!!!!!!! Must be gotten from indexer 
-    # display results
-    while(True):
-        try:
-            transaction_response = indexer.transaction(tx_id)
-            break
-        except Exception:
-            pass
-        finally:
-            time.sleep(1)
 
     app_id = transaction_response['transaction']['created-application-index']
     print("Created new app-id:", app_id)
@@ -390,3 +342,84 @@ def delete_app(client : algod.AlgodClient, indexer : indexer.IndexerClient, appi
     print("deleted app-id:", appid)
 
     return appid
+
+def has_asa_amt(indexer : indexer.IndexerClient, asset_id : int, amt : int, sender_addr : str) -> bool:
+
+    a = indexer.account_info(sender_addr)
+    asas = a['account']['assets']
+    for asa in asas:
+        if asa['asset-id'] == asset_id:
+            if asa['amount'] >= amt:
+                return True
+    
+    return False
+
+def fee_payment_provider_tx(client : algod.AlgodClient, indexer : indexer.IndexerClient, amt : int, asset_id : int, payer_key, receiver, allowFirstTxs : bool = True):    
+    if asset_id != 0:
+        b = has_asa_amt(indexer, asset_id, amt, account.address_from_private_key(payer_key))
+        if not b:
+            raise Exception("You don't own enough of asa ", asset_id, " to make tx ", account.address_from_private_key(payer_key))
+
+    isFirstTx = False
+    algoTxn = None
+    asaOptInTxn = None
+
+    # declare sender
+    sender = account.address_from_private_key(payer_key)
+    # get node suggested parameters
+    params = client.suggested_params()
+    if asset_id == 0 : #Algorand or not
+        # create unsigned transaction
+        txn = transaction.PaymentTxn(sender, params, receiver, amt)
+    else: #ASA
+        txn = transaction.AssetTransferTxn(sender, params, receiver, amt, asset_id)
+
+    if asset_id != 0:
+        b = has_asa_amt(indexer, asset_id, 0, receiver)
+        if not b:
+            transaction.AssetOptInTxn()
+
+    try:
+        indexer.account_info(receiver)
+    except Exception:
+        isFirstTx = True
+        if not allowFirstTxs:
+            raise Exception('First tx not allowed here')
+        else:
+            algoTxn = transaction.PaymentTxn(sender, params, receiver, 100000)
+
+    if (algoTxn is None):
+        return [txn]
+    else:
+        return [algoTxn, txn]
+
+# call application
+def call_app_tx(client :algod.AlgodClient, private_key, index, app_args) -> Txn: 
+    # declare sender
+    sender = account.address_from_private_key(private_key)
+
+    # get node suggested parameters
+    params = client.suggested_params()
+
+    # create unsigned transaction
+    txn = transaction.ApplicationNoOpTxn(sender, params, index, app_args)
+    return txn
+
+def create_payment_noop_group(client : algod.AlgodClient, indexer : indexer.IndexerClient, amt : int, asset_id : int, payer_pk , receiver_addr : str, app_args):
+    txns = fee_payment_provider_tx(client, indexer, amt, asset_id, payer_pk, receiver_addr)
+    txns.append(call_app_tx(client, payer_pk, app_args))
+
+    gid = transaction.calculate_group_id(txns)
+    for tx in txns:
+        tx.group = gid
+    
+    stxns = []
+    for tx in txns:
+        stxns.append(tx.sign(payer_pk))
+
+    tx_id = client.send_transactions(stxns)
+
+    # wait for confirmation
+    wait_for_confirmation(client, tx_id, 5) 
+
+    return []

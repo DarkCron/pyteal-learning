@@ -30,15 +30,17 @@ def main():
     
 
     temp_private_key = get_private_key_from_mnemonic(temp_mnem)
-    h = hashlib.sha256(temp_private_key.encode())
-    hhh = h.hexdigest().encode()
-    ha = Sha512_256(Bytes(temp_private_key))
+    #h = decode_address('66YMAS3O7C5BD3RDOQLCDGZ7EIYUQS7QAKQ2AXI74T6P3FJZWAYZE6HTVM')
+    #v = base64.b64decode('Y7cARyLxrN41LTfquxMFfEmwQpBNGzP35NCdprv76Fw=').decode('utf-8')
+    #hhh = h.hexdigest()
+    #ha = Sha512_256(56699746)
+    a = algod_indexer_client.applications(56701582)
+
     payer_private_key = get_private_key_from_mnemonic(payer_mnem)
     payer_address = account.address_from_private_key(payer_private_key)
 
     print("Global state:", read_global_state(algod_indexer_client ,account.address_from_private_key(temp_private_key), 56530113))
-    #delete_app(algod_client, algod_indexer_client, 56528150, temp_private_key)
-
+    #delete_app(algod_client, algod_indexer_client, 56701582, payer_private_key)
 
     #fee_payment_provider(algod_client, algod_indexer_client,4000,payer_private_key,temp_address, True)
 
@@ -51,6 +53,8 @@ def main():
 
     print(app_id)
     print("Global state:", read_global_state(algod_indexer_client ,account.address_from_private_key(temp_private_key), app_id))
+    app_args = ["ITxn"]
+    call_app(algod_client, payer_private_key, app_id, app_args)
     delete_app(algod_client, algod_indexer_client, app_id, payer_private_key)
     #delete_app(algod_client, algod_indexer_client, 56527153, temp_private_key)
 

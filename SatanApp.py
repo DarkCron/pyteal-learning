@@ -4,6 +4,7 @@ from algosdk.encoding import decode_address, encode_address
 from algosdk import account, mnemonic
 from algosdk.future import transaction
 from algosdk.v2client import algod, indexer
+from pyteal.ast.itxn import InnerTxnActionExpr
 from utils.tealhelpher import create_app, delete_app, update_app, read_global_state, get_private_key_from_mnemonic, intToBytes
 import base64
 import time
@@ -33,99 +34,134 @@ def Satansbank(creator_addr : str):
     )
 
 def approval_program():
-   # Mode.Application specifies that this is a smart contract
-   handle_creation = Seq([
-       Assert(Txn.application_args.length() == Int(6)),
-       App.globalPut(Bytes("Asa1ID"), Btoi(Txn.application_args[0])),
-       App.globalPut(Bytes("Asa2ID"), Btoi(Txn.application_args[1])),
-       App.globalPut(Bytes("Asa1Amt"), Sha512_256(Txn.application_args[5])),
-       App.globalPut(Bytes("Asa2Amt"), Int(0)),
-       App.globalPut(Bytes("Asa1Prec"), Btoi(Txn.application_args[2])),
-       App.globalPut(Bytes("Asa2Prec"), Btoi(Txn.application_args[3])),
-       App.globalPut(Bytes("CreatorId"), Int(11)),
-       App.globalPut(Bytes("EscAddr"), (Txn.application_args[4])),
-       App.globalPut(Bytes("bDataSet"), Txn.sender()),
-       App.globalPut(Bytes("Key"), Int(random.randrange(pow(2,31)))),
-       Return(Int(1))
-   ])
-
-   handle_optin = Return(Int(0))
-   handle_closeout = Return(Int(0))
-   handle_updateapp = Return(Int(1))
-   handle_deleteapp = Return(Int(0))
-
-   scratchCount = ScratchVar(TealType.uint64)
-   scratchBytesCount = ScratchVar(TealType.bytes)
-
-   dataSet = Seq([
-       scratchCount.store(App.globalGet(Bytes("bDataSet"))),
-       App.globalPut(Bytes("EscAddr"), Txn.sender()),
-       App.globalPut(Bytes("bDataSet"), scratchCount.load() + Int(1)),
-       Return(Int(1))
-   ])
-
-   add = Seq([
-       scratchCount.store(App.globalGet(Bytes("Count"))),
-       App.globalPut(Bytes("Count"), scratchCount.load() + Int(1)),
-       Return(Int(1))
-   ])
-
-   is_creator = Seq([
-       scratchBytesCount.store(Txn.sender()),
-       If(Txn.sender() == App.globalGet(Bytes("EscAddr")), Return(Int(1))),
-       Return(Int(0))
-   ])
-   #is_creator = Bytes('base64',encode_address(base64.b64decode(Txn.sender()))) == App.globalGet(Bytes("EscAddr"))
-
-   deduct = Seq([
-       scratchCount.store(App.globalGet(Bytes("Count"))),
-       If(scratchCount.load() > Int(0),
-          App.globalPut(Bytes("Count"), scratchCount.load() - Int(1)),
-          ),
-       Return(Int(1))
-   ])
-
-   InnerTxnBuilder().SetField()
-   itxn = Seq([
-       InnerTxnBuilder().Begin(), 
-       Return(Int(0))
+    # Mode.Application specifies that this is a smart contract
+    handle_creation = Seq([
+        Assert(Txn.application_args.length() == Int(5)),
+        App.globalPut(Bytes("Asa1ID"), Btoi(Txn.application_args[0])),
+        App.globalPut(Bytes("Asa2ID"), Btoi(Txn.application_args[1])),
+        App.globalPut(Bytes("Asa1Amt"), Int(0)),
+        App.globalPut(Bytes("Asa2Amt"), Int(0)),
+        App.globalPut(Bytes("Asa1Prec"), Btoi(Txn.application_args[2])),
+        App.globalPut(Bytes("Asa2Prec"), Btoi(Txn.application_args[3])),
+        App.globalPut(Bytes("CreatorId"), Int(11)),
+        App.globalPut(Bytes("Closer"), (Txn.application_args[4])),
+        App.globalPut(Bytes("bDataSet"), Int(0)),
+        App.globalPut(Bytes("Key"), Int(random.randrange(pow(2,31)))),
+        Return(Int(1))
     ])
 
-   handle_noop = Cond(
-       [And(
-           Global.group_size() == Int(1),  # Make sure the transaction isn't grouped
-           Txn.application_args[0] == Bytes("Tixn")
-       ), itxn],
-       [And(
-           Global.group_size() == Int(1),  # Make sure the transaction isn't grouped
-           App.globalGet(Bytes("bDataSet")) == Int(0),
-           Txn.application_args[0] == Bytes("SetData")
-       ), dataSet],
-       [And(
-           Global.group_size() == Int(1),  # Make sure the transaction isn't grouped
-           Txn.application_args[0] == Bytes("Add")
-       ), add],
-       [And(
-           Global.group_size() == Int(1),
-           Txn.application_args[0] == Bytes("Deduct")
-       ), deduct],
-   )
+    handle_optin = Return(Int(0))
+    handle_closeout = Return(Int(0))
+    handle_updateapp = Return(Int(1))
+    handle_deleteapp = Return(Int(0))
 
-   program = Cond(
-       [Txn.application_id() == Int(0), handle_creation],
-       [Txn.on_completion() == OnComplete.OptIn, handle_optin],
-       [Txn.on_completion() == OnComplete.CloseOut, handle_closeout],
-       [Txn.on_completion() == OnComplete.UpdateApplication, is_creator],
-       [Txn.on_completion() == OnComplete.DeleteApplication, is_creator],
-       [Txn.on_completion() == OnComplete.NoOp, handle_noop]
-   )
-   return compileTeal(program, Mode.Application, version=5)
+    scratchCount = ScratchVar(TealType.uint64)
+    scratchBytesCount = ScratchVar(TealType.bytes)
+
+    dataSet = Seq([
+        scratchCount.store(App.globalGet(Bytes("bDataSet"))),
+        App.globalPut(Bytes("Closer"), Txn.sender()),
+        App.globalPut(Bytes("bDataSet"), scratchCount.load() + Int(1)),
+        Return(Int(1))
+    ])
+
+    add = Seq([
+        scratchCount.store(App.globalGet(Bytes("Count"))),
+        App.globalPut(Bytes("Count"), scratchCount.load() + Int(1)),
+        Return(Int(1))
+    ])
+
+    is_creator = Seq([
+        If(Txn.sender() == App.globalGet(Bytes("Closer")), Return(Int(1))),
+        Return(Int(0))
+    ])
+    #is_creator = Bytes('base64',encode_address(base64.b64decode(Txn.sender()))) == App.globalGet(Bytes("Closer"))
+
+    deduct = Seq([
+        scratchCount.store(App.globalGet(Bytes("Count"))),
+        If(scratchCount.load() > Int(0),
+            App.globalPut(Bytes("Count"), scratchCount.load() - Int(1)),
+            ),
+        Return(Int(1))
+    ])
+
+    itxn = Seq([
+        #Clear assets
+            # InnerTxnBuilder().Begin(), 
+            # InnerTxnBuilder().SetFields(
+            #     {
+            #         TxnField.type_enum: TxnType.AssetTransfer,
+            #         TxnField.asset_sender: Global.current_application_address(),
+            #         TxnField.asset_receiver: App.globalGet(Bytes("Closer")),
+            #         TxnField.asset_close_to : App.globalGet(Bytes("Closer")),
+            #         }),
+            # InnerTxnBuilder().Submit(), 
+            InnerTxnBuilder().Begin(), 
+            InnerTxnBuilder().SetFields(
+                {
+                    TxnField.type_enum: TxnType.Payment,
+                    TxnField.sender: Global.current_application_address(),
+                    TxnField.receiver: App.globalGet(Bytes("Closer")),
+                    TxnField.close_remainder_to :  App.globalGet(Bytes("Closer")),
+                    TxnField.asset_close_to : App.globalGet(Bytes("Closer")),
+                    }),
+            InnerTxnBuilder().Submit(), 
+            Approve()
+        ])
+
+    optin = Seq([
+            InnerTxnBuilder().Begin(), 
+            InnerTxnBuilder().SetFields(
+                {
+                    TxnField.type_enum: TxnType.AssetTransfer,
+                    #TxnField.asset_sender: Global.current_application_address(),
+                    TxnField.asset_receiver: Global.current_application_address(),
+                    TxnField.xfer_asset :  App.globalGet(Bytes("Asa1ID")),
+                    TxnField.asset_amount :  Int(0),
+                    }),
+            InnerTxnBuilder().Submit(), 
+            Approve()
+        ])
+
+    handle_noop = Cond(
+        [And(
+            Global.group_size() == Int(1),  # Make sure the transaction isn't grouped
+            Txn.application_args[0] == Bytes("OptIn")
+        ), optin],
+        [And(
+            Global.group_size() == Int(1),  # Make sure the transaction isn't grouped
+            Txn.application_args[0] == Bytes("ITxn")
+        ), itxn],
+        [And(
+            Global.group_size() == Int(1),  # Make sure the transaction isn't grouped
+            App.globalGet(Bytes("bDataSet")) == Int(0),
+            Txn.application_args[0] == Bytes("SetData")
+        ), dataSet],
+        [And(
+            Global.group_size() == Int(1),  # Make sure the transaction isn't grouped
+            Txn.application_args[0] == Bytes("Add")
+        ), add],
+        [And(
+            Global.group_size() == Int(1),
+            Txn.application_args[0] == Bytes("Deduct")
+        ), deduct],
+    )
+
+    program = Cond(
+        [Txn.application_id() == Int(0), handle_creation],
+        [Txn.on_completion() == OnComplete.OptIn, handle_optin],
+        [Txn.on_completion() == OnComplete.CloseOut, handle_closeout],
+        [Txn.on_completion() == OnComplete.UpdateApplication, is_creator],
+        [Txn.on_completion() == OnComplete.DeleteApplication, is_creator],
+        [Txn.on_completion() == OnComplete.NoOp, handle_noop]
+    )
+    return compileTeal(program, Mode.Application, version=5)
 
 
 def clear_state_program():
-   program = Return(Int(1))
-   # Mode.Application specifies that this is a smart contract
-   return compileTeal(program, Mode.Application, version=5)
+    program = Return(Int(1))
+    # Mode.Application specifies that this is a smart contract
+    return compileTeal(program, Mode.Application, version=5)
 
 # helper function to compile program source
 def compile_program(client, source_code):
@@ -152,13 +188,13 @@ def app_schemas():
     local_ints = 0
     local_bytes = 2
     global_ints = 10 
-    global_bytes = 3
+    global_bytes = 4
     global_schema = transaction.StateSchema(global_ints, global_bytes)
     local_schema = transaction.StateSchema(local_ints, local_bytes)
 
     return global_schema, local_schema
 
-def app_ready_to_go(algod : algod.AlgodClient, indexer : indexer.IndexerClient, creator_pk :str, source_addr):
+def app_ready_to_go(algod : algod.AlgodClient, indexer : indexer.IndexerClient, creator_pk :str, source_addr : bytes):
     """A complete and ready to go compilation of the Satan app
 
     Args:
@@ -184,7 +220,7 @@ def app_ready_to_go(algod : algod.AlgodClient, indexer : indexer.IndexerClient, 
     
     # compile program to binary
     approval_program_compiled, _ = compile_program(algod, approval_program_teal)
-    
+
     # compile program to binary
     clear_state_program_compiled, _ = compile_program(algod, clear_state_program_teal)
 
@@ -207,8 +243,7 @@ def app_ready_to_go(algod : algod.AlgodClient, indexer : indexer.IndexerClient, 
         intToBytes(Asa2ID),
         intToBytes(Asa1Prec),
         intToBytes(Asa2Prec),
-        source_addr,
-        hashlib.sha256(creator_pk.encode()).hexdigest().encode()
+        source_addr
     ]
 
 

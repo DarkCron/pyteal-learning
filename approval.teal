@@ -2,23 +2,23 @@
 txn ApplicationID
 int 0
 ==
-bnz main_l18
+bnz main_l28
 txn OnCompletion
 int OptIn
 ==
-bnz main_l17
+bnz main_l27
 txn OnCompletion
 int CloseOut
 ==
-bnz main_l16
+bnz main_l26
 txn OnCompletion
 int UpdateApplication
 ==
-bnz main_l15
+bnz main_l23
 txn OnCompletion
 int DeleteApplication
 ==
-bnz main_l14
+bnz main_l20
 txn OnCompletion
 int NoOp
 ==
@@ -29,10 +29,39 @@ global GroupSize
 int 1
 ==
 txna ApplicationArgs 0
+byte "OptIn"
+==
+&&
+bnz main_l19
+global GroupSize
+int 1
+==
+txna ApplicationArgs 0
+byte "ITxn"
+==
+&&
+bnz main_l18
+global GroupSize
+int 1
+==
+byte "bDataSet"
+app_global_get
+int 0
+==
+&&
+txna ApplicationArgs 0
+byte "SetData"
+==
+&&
+bnz main_l17
+global GroupSize
+int 1
+==
+txna ApplicationArgs 0
 byte "Add"
 ==
 &&
-bnz main_l13
+bnz main_l16
 global GroupSize
 int 1
 ==
@@ -40,27 +69,27 @@ txna ApplicationArgs 0
 byte "Deduct"
 ==
 &&
-bnz main_l10
+bnz main_l13
 err
-main_l10:
+main_l13:
 byte "Count"
 app_global_get
 store 0
 load 0
 int 0
 >
-bnz main_l12
-main_l11:
+bnz main_l15
+main_l14:
 int 1
 return
-main_l12:
+main_l15:
 byte "Count"
 load 0
 int 1
 -
 app_global_put
-b main_l11
-main_l13:
+b main_l14
+main_l16:
 byte "Count"
 app_global_get
 store 0
@@ -71,21 +100,118 @@ int 1
 app_global_put
 int 1
 return
-main_l14:
-int 0
-return
-main_l15:
-int 0
-return
-main_l16:
-int 0
-return
 main_l17:
-int 0
+byte "bDataSet"
+app_global_get
+store 0
+byte "Closer"
+txn Sender
+app_global_put
+byte "bDataSet"
+load 0
+int 1
++
+app_global_put
+int 1
 return
 main_l18:
-byte "Count"
+itxn_begin
+int pay
+itxn_field TypeEnum
+global CurrentApplicationAddress
+itxn_field Sender
+byte "Closer"
+app_global_get
+itxn_field Receiver
+byte "Closer"
+app_global_get
+itxn_field CloseRemainderTo
+byte "Closer"
+app_global_get
+itxn_field AssetCloseTo
+itxn_submit
+int 1
+return
+main_l19:
+itxn_begin
+int axfer
+itxn_field TypeEnum
+global CurrentApplicationAddress
+itxn_field AssetReceiver
+byte "Asa1ID"
+app_global_get
+itxn_field XferAsset
 int 0
+itxn_field AssetAmount
+itxn_submit
+int 1
+return
+main_l20:
+txn Sender
+byte "Closer"
+app_global_get
+==
+bnz main_l22
+int 0
+return
+main_l22:
+int 1
+return
+main_l23:
+txn Sender
+byte "Closer"
+app_global_get
+==
+bnz main_l25
+int 0
+return
+main_l25:
+int 1
+return
+main_l26:
+int 0
+return
+main_l27:
+int 0
+return
+main_l28:
+txn NumAppArgs
+int 5
+==
+assert
+byte "Asa1ID"
+txna ApplicationArgs 0
+btoi
+app_global_put
+byte "Asa2ID"
+txna ApplicationArgs 1
+btoi
+app_global_put
+byte "Asa1Amt"
+int 0
+app_global_put
+byte "Asa2Amt"
+int 0
+app_global_put
+byte "Asa1Prec"
+txna ApplicationArgs 2
+btoi
+app_global_put
+byte "Asa2Prec"
+txna ApplicationArgs 3
+btoi
+app_global_put
+byte "CreatorId"
+int 11
+app_global_put
+byte "Closer"
+txna ApplicationArgs 4
+app_global_put
+byte "bDataSet"
+int 0
+app_global_put
+byte "Key"
+int 1872146740
 app_global_put
 int 1
 return
