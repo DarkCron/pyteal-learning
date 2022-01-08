@@ -305,7 +305,7 @@ def close_out_app(client : algod.AlgodClient, indexer : indexer.IndexerClient, a
     return appid
 
 # delete application
-def delete_app(client : algod.AlgodClient, indexer : indexer.IndexerClient, appid, private_key):
+def close_app(client : algod.AlgodClient, indexer : indexer.IndexerClient, appid, private_key):
     # define sender as creator
     sender = account.address_from_private_key(private_key)
 
@@ -317,6 +317,45 @@ def delete_app(client : algod.AlgodClient, indexer : indexer.IndexerClient, appi
 
     # create unsigned transaction
     txn = transaction.ApplicationDeleteTxn(sender, params, appid)
+    
+    # sign transaction
+    signed_txn = txn.sign(private_key)
+    tx_id = signed_txn.transaction.get_txid()
+
+    # send transaction
+    client.send_transactions([signed_txn])
+
+    # await confirmation
+    wait_for_confirmation(client, tx_id, 5)
+
+    #!!!!!!!! Must be gotten from indexer 
+    # display results
+    while(True):
+        try:
+            transaction_response = indexer.transaction(tx_id)
+            break
+        except Exception:
+            pass
+        finally:
+            time.sleep(1)
+
+    print("closed out app-id:", appid)
+
+    return appid
+
+# delete application
+def delete_app(client : algod.AlgodClient, indexer : indexer.IndexerClient, appid, private_key):
+    # define sender as creator
+    sender = account.address_from_private_key(private_key)
+
+    # declare on_complete as NoOp
+    on_complete = transaction.OnComplete.NoOpOC.real
+
+    # get node suggested parameters
+    params = client.suggested_params()
+
+    # create unsigned transaction
+    txn = transaction.ApplicationDeleteTxn(sender, params, appid, foreign_assets=[56335894])
     
     # sign transaction
     signed_txn = txn.sign(private_key)
@@ -363,6 +402,7 @@ def fee_payment_provider_tx(client : algod.AlgodClient, indexer : indexer.Indexe
     isFirstTx = False
     algoTxn = None
     asaOptInTxn = None
+    txns = []
 
     # declare sender
     sender = account.address_from_private_key(payer_key)
@@ -371,13 +411,16 @@ def fee_payment_provider_tx(client : algod.AlgodClient, indexer : indexer.Indexe
     if asset_id == 0 : #Algorand or not
         # create unsigned transaction
         txn = transaction.PaymentTxn(sender, params, receiver, amt)
+        txns.append(txn)
     else: #ASA
         txn = transaction.AssetTransferTxn(sender, params, receiver, amt, asset_id)
+        txns.append(txn)
 
     if asset_id != 0:
         b = has_asa_amt(indexer, asset_id, 0, receiver)
         if not b:
-            transaction.AssetOptInTxn()
+            txn = transaction.AssetOptInTxn(sender, params, asset_id)
+            txns.insert(0,txn)
 
     try:
         indexer.account_info(receiver)
@@ -387,11 +430,9 @@ def fee_payment_provider_tx(client : algod.AlgodClient, indexer : indexer.Indexe
             raise Exception('First tx not allowed here')
         else:
             algoTxn = transaction.PaymentTxn(sender, params, receiver, 100000)
+            txns.append(algoTxn)
 
-    if (algoTxn is None):
-        return [txn]
-    else:
-        return [algoTxn, txn]
+    return txns
 
 # call application
 def call_app_tx(client :algod.AlgodClient, private_key, index, app_args) -> Txn: 

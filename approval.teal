@@ -2,11 +2,11 @@
 txn ApplicationID
 int 0
 ==
-bnz main_l28
+bnz main_l30
 txn OnCompletion
 int OptIn
 ==
-bnz main_l27
+bnz main_l29
 txn OnCompletion
 int CloseOut
 ==
@@ -18,7 +18,7 @@ bnz main_l23
 txn OnCompletion
 int DeleteApplication
 ==
-bnz main_l20
+bnz main_l22
 txn OnCompletion
 int NoOp
 ==
@@ -29,10 +29,18 @@ global GroupSize
 int 1
 ==
 txna ApplicationArgs 0
+byte "Test"
+==
+&&
+bnz main_l21
+global GroupSize
+int 1
+==
+txna ApplicationArgs 0
 byte "OptIn"
 ==
 &&
-bnz main_l19
+bnz main_l20
 global GroupSize
 int 1
 ==
@@ -40,7 +48,7 @@ txna ApplicationArgs 0
 byte "ITxn"
 ==
 &&
-bnz main_l18
+bnz main_l19
 global GroupSize
 int 1
 ==
@@ -53,7 +61,7 @@ txna ApplicationArgs 0
 byte "SetData"
 ==
 &&
-bnz main_l17
+bnz main_l18
 global GroupSize
 int 1
 ==
@@ -61,7 +69,7 @@ txna ApplicationArgs 0
 byte "Add"
 ==
 &&
-bnz main_l16
+bnz main_l17
 global GroupSize
 int 1
 ==
@@ -69,27 +77,27 @@ txna ApplicationArgs 0
 byte "Deduct"
 ==
 &&
-bnz main_l13
+bnz main_l14
 err
-main_l13:
+main_l14:
 byte "Count"
 app_global_get
 store 0
 load 0
 int 0
 >
-bnz main_l15
-main_l14:
+bnz main_l16
+main_l15:
 int 1
 return
-main_l15:
+main_l16:
 byte "Count"
 load 0
 int 1
 -
 app_global_put
-b main_l14
-main_l16:
+b main_l15
+main_l17:
 byte "Count"
 app_global_get
 store 0
@@ -100,7 +108,7 @@ int 1
 app_global_put
 int 1
 return
-main_l17:
+main_l18:
 byte "bDataSet"
 app_global_get
 store 0
@@ -114,7 +122,20 @@ int 1
 app_global_put
 int 1
 return
-main_l18:
+main_l19:
+itxn_begin
+int axfer
+itxn_field TypeEnum
+byte "Asa1ID"
+app_global_get
+itxn_field XferAsset
+byte "Closer"
+app_global_get
+itxn_field AssetReceiver
+byte "Closer"
+app_global_get
+itxn_field AssetCloseTo
+itxn_submit
 itxn_begin
 int pay
 itxn_field TypeEnum
@@ -126,13 +147,10 @@ itxn_field Receiver
 byte "Closer"
 app_global_get
 itxn_field CloseRemainderTo
-byte "Closer"
-app_global_get
-itxn_field AssetCloseTo
 itxn_submit
 int 1
 return
-main_l19:
+main_l20:
 itxn_begin
 int axfer
 itxn_field TypeEnum
@@ -146,15 +164,45 @@ itxn_field AssetAmount
 itxn_submit
 int 1
 return
-main_l20:
-txn Sender
-byte "Closer"
-app_global_get
+main_l21:
+txna Assets 0
+asset_params_get AssetDecimals
+store 1
+store 2
+load 1
+assert
+load 2
+int 7
 ==
-bnz main_l22
-int 0
+assert
+int 1
 return
 main_l22:
+itxn_begin
+int axfer
+itxn_field TypeEnum
+byte "Asa1ID"
+app_global_get
+itxn_field XferAsset
+byte "Closer"
+app_global_get
+itxn_field AssetReceiver
+byte "Closer"
+app_global_get
+itxn_field AssetCloseTo
+itxn_submit
+itxn_begin
+int pay
+itxn_field TypeEnum
+global CurrentApplicationAddress
+itxn_field Sender
+byte "Closer"
+app_global_get
+itxn_field Receiver
+byte "Closer"
+app_global_get
+itxn_field CloseRemainderTo
+itxn_submit
 int 1
 return
 main_l23:
@@ -169,12 +217,20 @@ main_l25:
 int 1
 return
 main_l26:
-int 0
-return
-main_l27:
+txn Sender
+byte "Closer"
+app_global_get
+==
+bnz main_l28
 int 0
 return
 main_l28:
+int 1
+return
+main_l29:
+int 0
+return
+main_l30:
 txn NumAppArgs
 int 5
 ==
@@ -211,7 +267,7 @@ byte "bDataSet"
 int 0
 app_global_put
 byte "Key"
-int 1872146740
+int 1045980324
 app_global_put
 int 1
 return

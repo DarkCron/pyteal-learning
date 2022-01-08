@@ -33,34 +33,58 @@ def Satansbank(creator_addr : str):
         acceptable_fee,
     )
 
-def approval_program():
+def approval_program(asa1Id : int, asa2Id : int ):
+    asa1Id = Int(asa1Id)
+    asa2Id = Int(asa2Id)
+
+    has_correct_assets = And(Txn.assets[0] == asa1Id, Txn.assets[1] == asa2Id)
+    is_creator_txn = Txn.sender() ==  App.globalGet(Bytes("Creator"))
+
+    asa1Opt = AssetHolding.balance(Txn.sender(), asa1Id)
+    asa2Opt = AssetHolding.balance(Txn.sender(), asa2Id)
+    
     # Mode.Application specifies that this is a smart contract
     handle_creation = Seq([
         Assert(Txn.application_args.length() == Int(5)),
+        has_correct_assets,
+        asa1Opt,
+        asa2Opt,
+        Assert(And(asa1Opt.hasValue(), asa2Opt.hasValue())),
         App.globalPut(Bytes("Asa1ID"), Btoi(Txn.application_args[0])),
         App.globalPut(Bytes("Asa2ID"), Btoi(Txn.application_args[1])),
         App.globalPut(Bytes("Asa1Amt"), Int(0)),
         App.globalPut(Bytes("Asa2Amt"), Int(0)),
         App.globalPut(Bytes("Asa1Prec"), Btoi(Txn.application_args[2])),
         App.globalPut(Bytes("Asa2Prec"), Btoi(Txn.application_args[3])),
-        App.globalPut(Bytes("CreatorId"), Int(11)),
-        App.globalPut(Bytes("Closer"), (Txn.application_args[4])),
+        App.globalPut(Bytes("Creator"), Txn.application_args[4]),
         App.globalPut(Bytes("bDataSet"), Int(0)),
-        App.globalPut(Bytes("Key"), Int(random.randrange(pow(2,31)))),
         Return(Int(1))
     ])
 
     handle_optin = Return(Int(0))
-    handle_closeout = Return(Int(0))
-    handle_updateapp = Return(Int(1))
-    handle_deleteapp = Return(Int(0))
 
     scratchCount = ScratchVar(TealType.uint64)
     scratchBytesCount = ScratchVar(TealType.bytes)
 
     dataSet = Seq([
         scratchCount.store(App.globalGet(Bytes("bDataSet"))),
-        App.globalPut(Bytes("Closer"), Txn.sender()),
+        Assert(And(
+            Global.group_size() == Int(3),
+            has_correct_assets,
+            Gtxn[0].type_enum() == TxnType.AssetTransfer,                       #Provide Asset 1 for contract
+            Gtxn[1].type_enum() == TxnType.Payment,                             #Provide Algo for tx fees
+            Gtxn[2].type_enum() == TxnType.ApplicationCall,                     #
+            Gtxn[0].asset_receiver() == Global.current_application_address(),   #Make sure the asset 1 receiver is this
+            Gtxn[1].receiver() == Global.current_application_address(),         #Make sure the algo receiver is this
+            Gtxn[2].assets[0] == Gtxn[0].xfer_asset(),                          #Make sure asset 1 is being supplied
+            Gtxn[0].asset_amount > Int(0),
+            Gtxn[1].amount == Int(2000),
+            Gtxn[0].sender() == Gtxn[2].sender(),
+            Gtxn[1].sender() == Gtxn[2].sender(),
+            
+            Gtxn[2].sender() == App.globalGet(Bytes("Creator")),
+        )),
+        Gtxn[0].type_enum() == TxnType.ApplicationCall,
         App.globalPut(Bytes("bDataSet"), scratchCount.load() + Int(1)),
         Return(Int(1))
     ])
@@ -72,7 +96,7 @@ def approval_program():
     ])
 
     is_creator = Seq([
-        If(Txn.sender() == App.globalGet(Bytes("Closer")), Return(Int(1))),
+        If(Txn.sender() == App.globalGet(Bytes("Creator")), Return(Int(1))),
         Return(Int(0))
     ])
     #is_creator = Bytes('base64',encode_address(base64.b64decode(Txn.sender()))) == App.globalGet(Bytes("Closer"))
@@ -86,35 +110,34 @@ def approval_program():
     ])
 
     itxn = Seq([
-        #Clear assets
-            # InnerTxnBuilder().Begin(), 
-            # InnerTxnBuilder().SetFields(
-            #     {
-            #         TxnField.type_enum: TxnType.AssetTransfer,
-            #         TxnField.asset_sender: Global.current_application_address(),
-            #         TxnField.asset_receiver: App.globalGet(Bytes("Closer")),
-            #         TxnField.asset_close_to : App.globalGet(Bytes("Closer")),
-            #         }),
-            # InnerTxnBuilder().Submit(), 
+            #Clear assets
+            InnerTxnBuilder().Begin(), 
+            InnerTxnBuilder().SetFields(
+                {
+                    TxnField.type_enum: TxnType.AssetTransfer,
+                    TxnField.xfer_asset :  App.globalGet(Bytes("Asa1ID")),
+                    TxnField.asset_receiver: App.globalGet(Bytes("Creator")),
+                    TxnField.asset_close_to : App.globalGet(Bytes("Creator")),
+                    }),
+            InnerTxnBuilder().Submit(),
             InnerTxnBuilder().Begin(), 
             InnerTxnBuilder().SetFields(
                 {
                     TxnField.type_enum: TxnType.Payment,
                     TxnField.sender: Global.current_application_address(),
-                    TxnField.receiver: App.globalGet(Bytes("Closer")),
-                    TxnField.close_remainder_to :  App.globalGet(Bytes("Closer")),
-                    TxnField.asset_close_to : App.globalGet(Bytes("Closer")),
+                    TxnField.receiver: App.globalGet(Bytes("Creator")),
+                    TxnField.close_remainder_to :  App.globalGet(Bytes("Creator")),
                     }),
             InnerTxnBuilder().Submit(), 
             Approve()
         ])
-
-    optin = Seq([
+    
+    optin = Seq([ 
             InnerTxnBuilder().Begin(), 
             InnerTxnBuilder().SetFields(
-                {
+                {   
+                    #Keep Sender empty for OptIn
                     TxnField.type_enum: TxnType.AssetTransfer,
-                    #TxnField.asset_sender: Global.current_application_address(),
                     TxnField.asset_receiver: Global.current_application_address(),
                     TxnField.xfer_asset :  App.globalGet(Bytes("Asa1ID")),
                     TxnField.asset_amount :  Int(0),
@@ -123,7 +146,24 @@ def approval_program():
             Approve()
         ])
 
+    assetDecimals = AssetParam.decimals(Txn.assets[0])
+
+    test = Seq([ 
+        assetDecimals,
+        Assert(assetDecimals.hasValue()),
+        Assert(assetDecimals.value() == Int(7)),
+        Return(Int(1))
+        #Assert(AssetParam.decimals(Txn.assets[0]).value() == Int(6)),
+        #Return(Int(1))
+        #If(AssetParam.decimals(Int(0)).value() == Int(6), Return(Int(1))),
+        #Return(Int(0))
+    ])
+
     handle_noop = Cond(
+        [And(
+            Global.group_size() == Int(1),  # Make sure the transaction isn't grouped
+            Txn.application_args[0] == Bytes("Test")
+        ), test],
         [And(
             Global.group_size() == Int(1),  # Make sure the transaction isn't grouped
             Txn.application_args[0] == Bytes("OptIn")
@@ -133,7 +173,6 @@ def approval_program():
             Txn.application_args[0] == Bytes("ITxn")
         ), itxn],
         [And(
-            Global.group_size() == Int(1),  # Make sure the transaction isn't grouped
             App.globalGet(Bytes("bDataSet")) == Int(0),
             Txn.application_args[0] == Bytes("SetData")
         ), dataSet],
@@ -147,12 +186,14 @@ def approval_program():
         ), deduct],
     )
 
+
+
     program = Cond(
         [Txn.application_id() == Int(0), handle_creation],
         [Txn.on_completion() == OnComplete.OptIn, handle_optin],
-        [Txn.on_completion() == OnComplete.CloseOut, handle_closeout],
-        [Txn.on_completion() == OnComplete.UpdateApplication, is_creator],
-        [Txn.on_completion() == OnComplete.DeleteApplication, is_creator],
+        [Txn.on_completion() == OnComplete.CloseOut, is_creator],
+        [Txn.on_completion() == OnComplete.UpdateApplication, Return(Int(0))],
+        [Txn.on_completion() == OnComplete.DeleteApplication, itxn],
         [Txn.on_completion() == OnComplete.NoOp, handle_noop]
     )
     return compileTeal(program, Mode.Application, version=5)

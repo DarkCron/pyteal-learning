@@ -9,6 +9,7 @@ from SatanApp import app_ready_to_go, min_cost_for_app
 import base64
 import time
 import hashlib
+from pairing import pair, depair
 
 asaId1 = 56335894
 asaId2 = 56335957
@@ -16,6 +17,10 @@ req_fees = 4000
 app_id = 56519739
 
 def main():
+    print(pair(asaId1, asaId2))
+    print(depair(pair(asaId1, asaId2)))
+    4294967296
+    Sha256(Int(6347473116554983))
     # initialize an algodClient
     algod_client = algod.AlgodClient(default_algod_api_token(), default_algod_api_address(), headers={'User-Agent': 'py-algorand-sdk'})
     algod_indexer_client = indexer.IndexerClient(default_algod_api_token(), default_indexer_api_address(), headers={'User-Agent': 'py-algorand-sdk'})
