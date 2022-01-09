@@ -2,151 +2,311 @@
 txn ApplicationID
 int 0
 ==
-bnz main_l30
+bnz main_l44
 txn OnCompletion
 int OptIn
 ==
-bnz main_l29
+bnz main_l43
 txn OnCompletion
 int CloseOut
 ==
-bnz main_l26
+bnz main_l40
 txn OnCompletion
 int UpdateApplication
 ==
-bnz main_l23
+bnz main_l39
 txn OnCompletion
 int DeleteApplication
 ==
-bnz main_l22
+bnz main_l38
 txn OnCompletion
 int NoOp
 ==
 bnz main_l7
 err
 main_l7:
-global GroupSize
-int 1
-==
-txna ApplicationArgs 0
-byte "Test"
-==
-&&
-bnz main_l21
-global GroupSize
-int 1
-==
-txna ApplicationArgs 0
+txna ApplicationArgs 4
 byte "OptIn"
 ==
-&&
-bnz main_l20
-global GroupSize
-int 1
+bnz main_l30
+txna ApplicationArgs 4
+byte "Transact"
 ==
-txna ApplicationArgs 0
+bnz main_l23
+txna ApplicationArgs 4
+byte "Test"
+==
+bnz main_l22
+txna ApplicationArgs 4
 byte "ITxn"
 ==
-&&
-bnz main_l19
-global GroupSize
-int 1
-==
+bnz main_l17
 byte "bDataSet"
 app_global_get
 int 0
 ==
+txn NumAppArgs
+int 5
+==
 &&
-txna ApplicationArgs 0
+txna ApplicationArgs 4
 byte "SetData"
 ==
 &&
-bnz main_l18
-global GroupSize
-int 1
-==
-txna ApplicationArgs 0
-byte "Add"
-==
-&&
-bnz main_l17
-global GroupSize
-int 1
-==
-txna ApplicationArgs 0
-byte "Deduct"
-==
-&&
-bnz main_l14
+bnz main_l13
 err
-main_l14:
-byte "Count"
+main_l13:
+int 1
+callsub sub2
+byte "Asa1ID"
 app_global_get
-store 0
-load 0
+int 1
+!=
+bnz main_l16
+int 1
+callsub sub1
+assert
+global GroupSize
+int 2
+==
+gtxn 0 TypeEnum
+int pay
+==
+&&
+gtxn 1 TypeEnum
+int appl
+==
+&&
+gtxn 0 Receiver
+global CurrentApplicationAddress
+==
+&&
+int 1
+callsub sub3
+int 1
+==
+&&
+byte "Asa1ID"
+app_global_get
+int 1
+==
+&&
+gtxn 0 Amount
 int 0
 >
-bnz main_l16
+&&
+gtxn 0 Sender
+gtxn 1 Sender
+==
+&&
+gtxn 1 Sender
+byte "Creator"
+app_global_get
+==
+&&
+gtxn 0 Amount
+gtxna 1 ApplicationArgs 0
+btoi
+==
+&&
+assert
 main_l15:
+gtxn 1 NumAppArgs
+int 5
+==
+gtxna 1 ApplicationArgs 0
+btoi
+int 0
+>
+&&
+gtxna 1 ApplicationArgs 1
+btoi
+int 0
+>
+&&
+gtxna 1 ApplicationArgs 2
+btoi
+int 0
+>
+&&
+gtxna 1 ApplicationArgs 3
+btoi
+int 0
+>
+&&
+gtxna 1 ApplicationArgs 0
+btoi
+gtxna 1 ApplicationArgs 2
+btoi
+%
+int 0
+==
+&&
+gtxna 1 ApplicationArgs 1
+btoi
+gtxna 1 ApplicationArgs 0
+btoi
+gtxna 1 ApplicationArgs 2
+btoi
+/
+%
+int 0
+==
+&&
+gtxna 1 ApplicationArgs 1
+btoi
+gtxna 1 ApplicationArgs 3
+btoi
+%
+int 0
+==
+&&
+gtxna 1 ApplicationArgs 0
+btoi
+gtxna 1 ApplicationArgs 3
+btoi
+*
+gtxna 1 ApplicationArgs 2
+btoi
+/
+gtxna 1 ApplicationArgs 1
+btoi
+==
+&&
+assert
+byte "Asa1Amt"
+gtxna 1 ApplicationArgs 0
+btoi
+app_global_put
+byte "Asa2Amt"
+gtxna 1 ApplicationArgs 1
+btoi
+app_global_put
+byte "Asa1Div"
+gtxna 1 ApplicationArgs 2
+btoi
+app_global_put
+byte "Asa2Div"
+gtxna 1 ApplicationArgs 3
+btoi
+app_global_put
+byte "bDataSet"
+int 1
+app_global_put
 int 1
 return
 main_l16:
-byte "Count"
-load 0
 int 1
--
-app_global_put
+callsub sub1
+assert
+global GroupSize
+int 2
+==
+gtxn 0 TypeEnum
+int axfer
+==
+&&
+gtxn 1 TypeEnum
+int appl
+==
+&&
+gtxn 0 AssetReceiver
+global CurrentApplicationAddress
+==
+&&
+int 1
+callsub sub3
+int 1
+==
+&&
+gtxna 1 Assets 0
+gtxn 0 XferAsset
+==
+&&
+gtxn 0 AssetAmount
+int 0
+>
+&&
+gtxn 0 Sender
+gtxn 1 Sender
+==
+&&
+gtxn 1 Sender
+byte "Creator"
+app_global_get
+==
+&&
+gtxn 0 AssetAmount
+gtxna 1 ApplicationArgs 0
+btoi
+==
+&&
+assert
 b main_l15
 main_l17:
-byte "Count"
-app_global_get
-store 0
-byte "Count"
-load 0
 int 1
-+
-app_global_put
-int 1
-return
-main_l18:
-byte "bDataSet"
-app_global_get
-store 0
-byte "Closer"
+callsub sub2
 txn Sender
-app_global_put
-byte "bDataSet"
-load 0
-int 1
-+
-app_global_put
-int 1
-return
-main_l19:
-itxn_begin
-int axfer
-itxn_field TypeEnum
+byte "Creator"
+app_global_get
+==
+assert
+global GroupSize
+int 2
+==
+gtxn 0 TypeEnum
+int pay
+==
+&&
+gtxn 1 TypeEnum
+int appl
+==
+&&
+gtxn 0 Sender
+gtxn 1 Sender
+==
+&&
+gtxn 1 Sender
+byte "Creator"
+app_global_get
+==
+&&
+gtxn 0 Receiver
+global CurrentApplicationAddress
+==
+&&
+gtxn 0 Amount
+int 1000
+int 3
+*
+==
+&&
+assert
 byte "Asa1ID"
 app_global_get
-itxn_field XferAsset
-byte "Closer"
+int 1
+!=
+bnz main_l21
+main_l18:
+byte "Asa2ID"
 app_global_get
-itxn_field AssetReceiver
-byte "Closer"
-app_global_get
-itxn_field AssetCloseTo
-itxn_submit
+int 1
+!=
+bnz main_l20
+main_l19:
 itxn_begin
 int pay
 itxn_field TypeEnum
 global CurrentApplicationAddress
 itxn_field Sender
-byte "Closer"
+byte "Creator"
 app_global_get
 itxn_field Receiver
-byte "Closer"
+byte "Creator"
 app_global_get
 itxn_field CloseRemainderTo
+int 1000
+itxn_field Fee
 itxn_submit
 int 1
 return
@@ -154,86 +314,491 @@ main_l20:
 itxn_begin
 int axfer
 itxn_field TypeEnum
-global CurrentApplicationAddress
-itxn_field AssetReceiver
-byte "Asa1ID"
+byte "Asa2ID"
 app_global_get
 itxn_field XferAsset
-int 0
-itxn_field AssetAmount
+byte "Creator"
+app_global_get
+itxn_field AssetReceiver
+byte "Creator"
+app_global_get
+itxn_field AssetCloseTo
+int 1000
+itxn_field Fee
 itxn_submit
-int 1
-return
+b main_l19
 main_l21:
-txna Assets 0
-asset_params_get AssetDecimals
-store 1
-store 2
-load 1
-assert
-load 2
-int 7
-==
-assert
-int 1
-return
-main_l22:
 itxn_begin
 int axfer
 itxn_field TypeEnum
 byte "Asa1ID"
 app_global_get
 itxn_field XferAsset
-byte "Closer"
+byte "Creator"
 app_global_get
 itxn_field AssetReceiver
-byte "Closer"
+byte "Creator"
 app_global_get
 itxn_field AssetCloseTo
+int 1000
+itxn_field Fee
 itxn_submit
-itxn_begin
+b main_l18
+main_l22:
+txna Assets 2
+asset_params_get AssetClawback
+store 5
+store 6
+load 5
+assert
+int 3
+callsub sub2
+gtxn 0 TypeEnum
 int pay
-itxn_field TypeEnum
-global CurrentApplicationAddress
-itxn_field Sender
-byte "Closer"
+==
+gtxn 1 TypeEnum
+int afrz
+==
+&&
+gtxn 2 TypeEnum
+int axfer
+==
+&&
+gtxn 3 TypeEnum
+int afrz
+==
+&&
+gtxn 0 Amount
+int 1000
+int 2
+*
+==
+&&
+gtxn 1 FreezeAssetFrozen
+int 0
+==
+&&
+gtxn 1 FreezeAsset
+gtxn 2 XferAsset
+==
+&&
+gtxn 3 FreezeAsset
+gtxn 2 XferAsset
+==
+&&
+gtxn 2 XferAsset
+byte "MarkerId"
 app_global_get
-itxn_field Receiver
-byte "Closer"
+==
+&&
+gtxn 3 FreezeAssetFrozen
+int 1
+==
+&&
+gtxn 2 AssetAmount
+int 1
+==
+&&
+gtxn 0 Sender
+byte "Creator"
 app_global_get
-itxn_field CloseRemainderTo
-itxn_submit
+==
+&&
+gtxn 0 Receiver
+load 6
+==
+&&
+gtxn 1 Sender
+load 6
+==
+&&
+gtxn 1 Receiver
+byte "Creator"
+app_global_get
+==
+&&
+gtxn 2 Sender
+byte "Creator"
+app_global_get
+==
+&&
+gtxn 2 Receiver
+load 6
+==
+&&
+gtxn 3 Sender
+load 6
+==
+&&
+gtxn 3 Receiver
+byte "Creator"
+app_global_get
+==
+&&
+assert
 int 1
 return
 main_l23:
-txn Sender
-byte "Closer"
-app_global_get
+int 2
+callsub sub2
+gtxn 0 TypeEnum
+int axfer
 ==
-bnz main_l25
+byte "Asa2ID"
+app_global_get
+int 1
+!=
+&&
+bnz main_l29
+int 2
+callsub sub1
+assert
+gtxn 0 Amount
+store 4
+global GroupSize
+int 3
+==
+gtxn 0 TypeEnum
+int pay
+==
+&&
+gtxn 1 TypeEnum
+int pay
+==
+&&
+gtxn 2 TypeEnum
+int appl
+==
+&&
+gtxn 0 Receiver
+global CurrentApplicationAddress
+==
+&&
+gtxn 1 Receiver
+global CurrentApplicationAddress
+==
+&&
+int 2
+callsub sub3
+int 1
+==
+&&
+byte "Asa2ID"
+app_global_get
+int 1
+==
+&&
+gtxn 0 Amount
 int 0
-return
+>
+&&
+byte "Asa2Amt"
+app_global_get
+gtxna 2 ApplicationArgs 0
+btoi
+>=
+&&
+load 4
+byte "Asa2Div"
+app_global_get
+%
+int 0
+==
+&&
+gtxn 1 Amount
+int 1000
+==
+&&
+gtxn 0 Sender
+gtxn 1 Sender
+==
+&&
+gtxn 1 Sender
+gtxn 2 Sender
+==
+&&
+gtxn 2 Sender
+gtxn 0 Sender
+==
+&&
+assert
 main_l25:
-int 1
-return
-main_l26:
-txn Sender
-byte "Closer"
-app_global_get
-==
-bnz main_l28
-int 0
-return
-main_l28:
-int 1
-return
-main_l29:
-int 0
-return
-main_l30:
-txn NumAppArgs
+gtxn 2 NumAppArgs
 int 5
 ==
+assert
+byte "Asa1Amt"
+byte "Asa1Amt"
+app_global_get
+byte "Asa2Div"
+app_global_get
+load 4
+/
+byte "Asa1Div"
+app_global_get
+*
+-
+app_global_put
+byte "Asa2Amt"
+byte "Asa1Amt"
+app_global_get
+byte "Asa2Div"
+app_global_get
+load 4
+/
+byte "Asa2Div"
+app_global_get
+*
+-
+app_global_put
+gtxn 0 TypeEnum
+int axfer
+==
+byte "Asa2ID"
+app_global_get
+int 1
+!=
+&&
+bnz main_l28
+itxn_begin
+int pay
+itxn_field TypeEnum
+gtxn 0 Sender
+itxn_field Receiver
+load 4
+byte "Asa2Div"
+app_global_get
+/
+byte "Asa1Div"
+app_global_get
+*
+itxn_field Amount
+int 1000
+itxn_field Fee
+itxn_submit
+main_l27:
+int 1
+return
+main_l28:
+itxn_begin
+int axfer
+itxn_field TypeEnum
+byte "Asa1ID"
+app_global_get
+itxn_field XferAsset
+gtxn 0 Sender
+itxn_field AssetReceiver
+load 4
+byte "Asa2Div"
+app_global_get
+/
+byte "Asa1Div"
+app_global_get
+*
+itxn_field AssetAmount
+int 1000
+itxn_field Fee
+itxn_submit
+b main_l27
+main_l29:
+int 2
+callsub sub1
+assert
+gtxn 0 AssetAmount
+store 4
+global GroupSize
+int 3
+==
+gtxn 0 TypeEnum
+int axfer
+==
+&&
+gtxn 1 TypeEnum
+int pay
+==
+&&
+gtxn 2 TypeEnum
+int appl
+==
+&&
+gtxn 0 AssetReceiver
+global CurrentApplicationAddress
+==
+&&
+gtxn 1 Receiver
+global CurrentApplicationAddress
+==
+&&
+int 2
+callsub sub3
+int 1
+==
+&&
+gtxna 2 Assets 1
+gtxn 0 XferAsset
+==
+&&
+gtxn 0 AssetAmount
+int 0
+>
+&&
+byte "Asa2Amt"
+app_global_get
+gtxna 2 ApplicationArgs 0
+btoi
+>=
+&&
+load 4
+byte "Asa2Div"
+app_global_get
+%
+int 0
+==
+&&
+gtxn 1 Amount
+int 1000
+==
+&&
+gtxn 0 Sender
+gtxn 1 Sender
+==
+&&
+gtxn 1 Sender
+gtxn 2 Sender
+==
+&&
+gtxn 2 Sender
+gtxn 0 Sender
+==
+&&
+assert
+b main_l25
+main_l30:
+int 1
+callsub sub2
+int 1
+callsub sub1
+assert
+global GroupSize
+int 2
+==
+gtxn 0 TypeEnum
+int pay
+==
+&&
+gtxn 1 TypeEnum
+int appl
+==
+&&
+gtxn 0 Receiver
+global CurrentApplicationAddress
+==
+&&
+gtxn 0 Sender
+gtxn 1 Sender
+==
+&&
+gtxn 1 Sender
+byte "Creator"
+app_global_get
+==
+&&
+assert
+byte "Asa1ID"
+app_global_get
+int 1
+!=
+byte "Asa2ID"
+app_global_get
+int 1
+!=
+&&
+bnz main_l37
+gtxn 0 Amount
+int 100000
+int 1000
+int 100000
++
++
+==
+assert
+main_l32:
+byte "Asa1ID"
+app_global_get
+int 1
+!=
+bnz main_l36
+main_l33:
+byte "Asa2ID"
+app_global_get
+int 1
+!=
+bnz main_l35
+main_l34:
+int 1
+return
+main_l35:
+byte "Asa2ID"
+app_global_get
+callsub sub4
+b main_l34
+main_l36:
+byte "Asa1ID"
+app_global_get
+callsub sub4
+b main_l33
+main_l37:
+gtxn 0 Amount
+int 100000
+int 1000
+int 100000
++
+int 2
+*
++
+==
+assert
+b main_l32
+main_l38:
+int 1
+return
+main_l39:
+int 0
+return
+main_l40:
+txn Sender
+byte "Creator"
+app_global_get
+==
+bnz main_l42
+int 0
+return
+main_l42:
+int 1
+return
+main_l43:
+int 0
+return
+main_l44:
+txn NumAppArgs
+int 4
+==
+assert
+callsub sub0
+assert
+txn Sender
+int 56335957
+asset_holding_get AssetBalance
+store 0
+store 1
+txn Sender
+int 56335957
+asset_holding_get AssetBalance
+store 2
+store 3
+load 0
+load 2
+&&
 assert
 byte "Asa1ID"
 txna ApplicationArgs 0
@@ -249,25 +814,93 @@ app_global_put
 byte "Asa2Amt"
 int 0
 app_global_put
-byte "Asa1Prec"
+byte "Asa1Div"
+int 0
+app_global_put
+byte "Asa2Div"
+int 0
+app_global_put
+byte "Creator"
 txna ApplicationArgs 2
-btoi
-app_global_put
-byte "Asa2Prec"
-txna ApplicationArgs 3
-btoi
-app_global_put
-byte "CreatorId"
-int 11
-app_global_put
-byte "Closer"
-txna ApplicationArgs 4
 app_global_put
 byte "bDataSet"
 int 0
 app_global_put
-byte "Key"
-int 1045980324
+byte "MarkerId"
+txna ApplicationArgs 3
+btoi
 app_global_put
 int 1
 return
+sub0: // sub_has_correct_assets
+txna ApplicationArgs 0
+btoi
+txna Assets 0
+==
+txna ApplicationArgs 1
+btoi
+txna Assets 1
+==
+&&
+txna ApplicationArgs 3
+btoi
+txna Assets 2
+==
+&&
+retsub
+sub1: // sub_has_correct_assets_for_i
+store 7
+byte "Asa1ID"
+app_global_get
+load 7
+gtxnsa Assets 0
+==
+byte "Asa2ID"
+app_global_get
+load 7
+gtxnsa Assets 1
+==
+&&
+byte "MarkerId"
+app_global_get
+load 7
+gtxnsa Assets 2
+==
+&&
+retsub
+sub2: // sub_assert_gtxn_safe
+store 8
+int 1
+int 1
+==
+assert
+retsub
+sub3: // and_assets_ok
+store 9
+load 9
+gtxnsa Assets 0
+byte "Asa1ID"
+app_global_get
+==
+load 9
+gtxnsa Assets 1
+byte "Asa2ID"
+app_global_get
+==
+&&
+retsub
+sub4: // sub_opt_in
+store 10
+itxn_begin
+int axfer
+itxn_field TypeEnum
+global CurrentApplicationAddress
+itxn_field AssetReceiver
+load 10
+itxn_field XferAsset
+int 0
+itxn_field AssetAmount
+int 1000
+itxn_field Fee
+itxn_submit
+retsub

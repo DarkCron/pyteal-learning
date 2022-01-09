@@ -1,14 +1,18 @@
 from algosdk import future
-from algosdk.encoding import decode_address, encode_address
+from algosdk.encoding import decode_address, encode_address, checksum
 from pyteal import *
 from algosdk import account, mnemonic
 from algosdk.future import transaction
 from algosdk.v2client import algod, indexer
 from typing import List
+import algosdk
 import base64
 import time
 
 from pyteal.ast import addr
+
+def get_address_from_app_id(app_id):
+    return algosdk.encoding.encode_address(checksum(b'appID'+(app_id).to_bytes(8, 'big')))
 
 def generate_algorand_keypair():
     private_key, address = account.generate_account()
@@ -170,11 +174,10 @@ def call_app(client :algod.AlgodClient, private_key, index, app_args) :
     params = client.suggested_params()
 
     # create unsigned transaction
-    txn = transaction.ApplicationNoOpTxn(sender, params, index, app_args, foreign_assets=[56335894])
+    txn = transaction.ApplicationNoOpTxn(sender, params, index, app_args, foreign_assets=[56335894, 56335957])
 
     # sign transaction
     signed_txn = txn.sign(private_key)
-    t = Txn.sender()
     tx_id = signed_txn.transaction.get_txid()
 
     # send transaction
@@ -186,7 +189,7 @@ def call_app(client :algod.AlgodClient, private_key, index, app_args) :
     print("Application called")
 
 # create new application
-def create_app(client : algod.AlgodClient, indexer: indexer.IndexerClient, private_key, approval_program, clear_program, global_schema, local_schema, app_args = []):
+def create_app(client : algod.AlgodClient, indexer: indexer.IndexerClient, private_key, approval_program, clear_program, global_schema, local_schema, app_args = [], args : dict = {}):
     # define sender as creator
     sender = account.address_from_private_key(private_key)
 
@@ -195,15 +198,15 @@ def create_app(client : algod.AlgodClient, indexer: indexer.IndexerClient, priva
 
     # get node suggested parameters
     params = client.suggested_params()
-
+    
     # create unsigned transaction
     txn = transaction.ApplicationCreateTxn(sender, params, on_complete, \
                                             approval_program, clear_program, \
-                                            global_schema, local_schema, app_args, foreign_assets=[56335894])
+                                            global_schema, local_schema, app_args, foreign_assets=[args['ASA1'], args['ASA2'], args['MARKER']])
     # sign transaction
     signed_txn = txn.sign(private_key)
     tx_id = signed_txn.transaction.get_txid()
-
+    
     # send transaction
     client.send_transactions([signed_txn])
 
@@ -355,7 +358,7 @@ def delete_app(client : algod.AlgodClient, indexer : indexer.IndexerClient, appi
     params = client.suggested_params()
 
     # create unsigned transaction
-    txn = transaction.ApplicationDeleteTxn(sender, params, appid, foreign_assets=[56335894])
+    txn = transaction.ApplicationDeleteTxn(sender, params, appid, foreign_assets=[56335894, 56335957])
     
     # sign transaction
     signed_txn = txn.sign(private_key)

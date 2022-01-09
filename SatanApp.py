@@ -37,16 +37,79 @@ def approval_program(asa1Id : int, asa2Id : int ):
     asa1Id = Int(asa1Id)
     asa2Id = Int(asa2Id)
 
-    has_correct_assets = And(Txn.assets[0] == asa1Id, Txn.assets[1] == asa2Id)
-    is_creator_txn = Txn.sender() ==  App.globalGet(Bytes("Creator"))
+    
+    # has_correct_assets = Assert(
+    #     And(
+    #         (Btoi(Txn.application_args[0]) == Txn.assets[0]),
+    #         (Btoi(Txn.application_args[1]) == Txn.assets[1]),
+    #         (Btoi(Txn.application_args[3]) == Txn.assets[2])
+    #     )
+    # )
+
+    # has_correct_assets = Assert(
+    #     And(
+    #         (Btoi(Txn.application_args[0]) == Txn.assets[0]),
+    #         (Btoi(Txn.application_args[1]) == Txn.assets[1]),
+    #         (Btoi(Txn.application_args[3]) == Txn.assets[2])
+    #     )
+    # )
+
+    @Subroutine(TealType.uint64)
+    def sub_has_correct_assets():
+        return And(
+            (Btoi(Txn.application_args[0]) == Txn.assets[0]),
+            (Btoi(Txn.application_args[1]) == Txn.assets[1]),
+            (Btoi(Txn.application_args[3]) == Txn.assets[2])
+        )
+    
+    @Subroutine(TealType.uint64)
+    def sub_has_correct_assets_for_i(i : Int):
+        return And(
+            (App.globalGet(Bytes("Asa1ID")) == Gtxn[i].assets[0]),
+            (App.globalGet(Bytes("Asa2ID")) == Gtxn[i].assets[1]),
+            (App.globalGet(Bytes("MarkerId")) == Gtxn[i].assets[2])
+        )
 
     asa1Opt = AssetHolding.balance(Txn.sender(), asa1Id)
     asa2Opt = AssetHolding.balance(Txn.sender(), asa2Id)
+
+    tx_act_fee = Int(100000)
+    tx_min_fee = Int(1000)
+    tx_min_fee_opt = Int(100000)
+
     
-    # Mode.Application specifies that this is a smart contract
+    # def assert_gtxn_safe(i : int):
+    #     return Assert(
+    #         And(
+    #             Gtxn[i].close_remainder_to() == Global.zero_address(),
+    #             Gtxn[i].asset_close_to() == Global.zero_address(),
+    #             Gtxn[i].rekey_to() == Global.zero_address(),
+    #             Gtxn[i].fee() <= tx_min_fee
+    #         ))
+
+    @Subroutine(TealType.none)
+    def sub_assert_gtxn_safe(i : Int):
+        scratchCount.store(Int(0)),
+        While(scratchCount.load() <= i).Do(
+            Seq(
+                [
+                    Assert(
+                        And(
+                            Gtxn[scratchCount.load()].close_remainder_to() == Global.zero_address(),
+                            Gtxn[scratchCount.load()].asset_close_to() == Global.zero_address(),
+                            Gtxn[scratchCount.load()].rekey_to() == Global.zero_address(),
+                            Gtxn[scratchCount.load()].fee() <= tx_min_fee
+                        )
+                    ),
+                    scratchCount.store(scratchCount.load() + Int(1))
+                ]
+            )
+        )
+        return Assert(Int(1) == Int(1))
+    
     handle_creation = Seq([
-        Assert(Txn.application_args.length() == Int(5)),
-        has_correct_assets,
+        Assert(Txn.application_args.length() == Int(4)),
+        Assert(sub_has_correct_assets()),
         asa1Opt,
         asa2Opt,
         Assert(And(asa1Opt.hasValue(), asa2Opt.hasValue())),
@@ -54,44 +117,165 @@ def approval_program(asa1Id : int, asa2Id : int ):
         App.globalPut(Bytes("Asa2ID"), Btoi(Txn.application_args[1])),
         App.globalPut(Bytes("Asa1Amt"), Int(0)),
         App.globalPut(Bytes("Asa2Amt"), Int(0)),
-        App.globalPut(Bytes("Asa1Prec"), Btoi(Txn.application_args[2])),
-        App.globalPut(Bytes("Asa2Prec"), Btoi(Txn.application_args[3])),
-        App.globalPut(Bytes("Creator"), Txn.application_args[4]),
+        App.globalPut(Bytes("Asa1Div"), Int(0)),
+        App.globalPut(Bytes("Asa2Div"), Int(0)),
+        App.globalPut(Bytes("Creator"), Txn.application_args[2]),
         App.globalPut(Bytes("bDataSet"), Int(0)),
+        App.globalPut(Bytes("MarkerId"), Btoi(Txn.application_args[3])),
         Return(Int(1))
     ])
 
     handle_optin = Return(Int(0))
 
     scratchCount = ScratchVar(TealType.uint64)
-    scratchBytesCount = ScratchVar(TealType.bytes)
+
+    @Subroutine(TealType.uint64)
+    def and_assets_ok(i): 
+        return And(
+            Gtxn[i].assets[0] == App.globalGet(Bytes("Asa1ID")),
+            Gtxn[i].assets[1] == App.globalGet(Bytes("Asa2ID")),
+        )
 
     dataSet = Seq([
-        scratchCount.store(App.globalGet(Bytes("bDataSet"))),
+        sub_assert_gtxn_safe(Int(1)),
+        If(And(App.globalGet(Bytes("Asa1ID")) != Int(1)), 
+            #THEN BRANCH -> IF ASSET 1 AND ASSET 2 =/= ALGO
+            Seq([
+                Assert(sub_has_correct_assets_for_i(Int(1))),
+                Assert(And(
+                    Global.group_size() == Int(2),
+                    Gtxn[0].type_enum() == TxnType.AssetTransfer,                       #Provide Asset 1 for contract
+                    Gtxn[1].type_enum() == TxnType.ApplicationCall,                     #
+                    Gtxn[0].asset_receiver() == Global.current_application_address(),   #Make sure the asset 1 receiver is this
+                    and_assets_ok(Int(1)) == Int(1),
+                    Gtxn[1].assets[0] == Gtxn[0].xfer_asset(),                          #Make sure asset 1 is being supplied
+                    Gtxn[0].asset_amount() > Int(0),
+                    Gtxn[0].sender() == Gtxn[1].sender(),
+                    Gtxn[1].sender() == App.globalGet(Bytes("Creator")),
+                    #Make sure initial provision matches amount transferred
+                    Gtxn[0].asset_amount()  == Btoi(Gtxn[1].application_args[0])
+                )),
+            ]),
+            #ELSE BRANCH -> IF ASSET 1 OR ASSET 2 == ALGO
+            #ASA1 IS ALGO
+            Seq([
+                Assert(sub_has_correct_assets_for_i(Int(1))),
+                Assert(And(
+                    Global.group_size() == Int(2),
+                    Gtxn[0].type_enum() == TxnType.Payment,                             #Provide Asset 1 for contract
+                    Gtxn[1].type_enum() == TxnType.ApplicationCall,                     #
+                    Gtxn[0].receiver() == Global.current_application_address(),         #Make sure the asset 1 receiver is this
+                    and_assets_ok(Int(1)) == Int(1),              
+                    App.globalGet(Bytes("Asa1ID")) == Int(1),                               #In this special case ALGO == ID 1
+                    Gtxn[0].amount() > Int(0),
+                    Gtxn[0].sender() == Gtxn[1].sender(),
+                    Gtxn[1].sender() == App.globalGet(Bytes("Creator")),
+                    #Make sure initial provision matches amount transferred
+                    Gtxn[0].amount()  == Btoi(Gtxn[1].application_args[0])
+                )),
+            ])
+        ),
+        #math check common props for both asset and transfer payment
         Assert(And(
-            Global.group_size() == Int(3),
-            has_correct_assets,
-            Gtxn[0].type_enum() == TxnType.AssetTransfer,                       #Provide Asset 1 for contract
-            Gtxn[1].type_enum() == TxnType.Payment,                             #Provide Algo for tx fees
-            Gtxn[2].type_enum() == TxnType.ApplicationCall,                     #
-            Gtxn[0].asset_receiver() == Global.current_application_address(),   #Make sure the asset 1 receiver is this
-            Gtxn[1].receiver() == Global.current_application_address(),         #Make sure the algo receiver is this
-            Gtxn[2].assets[0] == Gtxn[0].xfer_asset(),                          #Make sure asset 1 is being supplied
-            Gtxn[0].asset_amount > Int(0),
-            Gtxn[1].amount == Int(2000),
-            Gtxn[0].sender() == Gtxn[2].sender(),
-            Gtxn[1].sender() == Gtxn[2].sender(),
-            
-            Gtxn[2].sender() == App.globalGet(Bytes("Creator")),
+            Gtxn[1].application_args.length() == Int(5), #args[0] = amount 1, args[1] = amount 2, args[2] = div 1, args[3] = div 2 , args[4] = NooP Call
+            Btoi(Gtxn[1].application_args[0]) > Int(0),
+            Btoi(Gtxn[1].application_args[1]) > Int(0),
+            Btoi(Gtxn[1].application_args[2]) > Int(0),
+            Btoi(Gtxn[1].application_args[3]) > Int(0),
+            Btoi(Gtxn[1].application_args[0]) % Btoi(Gtxn[1].application_args[2]) == Int(0),
+            Btoi(Gtxn[1].application_args[1]) % (Btoi(Gtxn[1].application_args[0]) / Btoi(Gtxn[1].application_args[2])) == Int(0),
+            Btoi(Gtxn[1].application_args[1]) % (Btoi(Gtxn[1].application_args[3])) == Int(0),
+            (Btoi(Gtxn[1].application_args[0]) * Btoi(Gtxn[1].application_args[3]) / Btoi(Gtxn[1].application_args[2])) == Btoi(Gtxn[1].application_args[1]),
         )),
-        Gtxn[0].type_enum() == TxnType.ApplicationCall,
-        App.globalPut(Bytes("bDataSet"), scratchCount.load() + Int(1)),
+        App.globalPut(Bytes("Asa1Amt"), Btoi(Gtxn[1].application_args[0])),
+        App.globalPut(Bytes("Asa2Amt"), Btoi(Gtxn[1].application_args[1])),
+        App.globalPut(Bytes("Asa1Div"), Btoi(Gtxn[1].application_args[2])),
+        App.globalPut(Bytes("Asa2Div"), Btoi(Gtxn[1].application_args[3])),
+        App.globalPut(Bytes("bDataSet"), Int(1)),
         Return(Int(1))
     ])
 
-    add = Seq([
-        scratchCount.store(App.globalGet(Bytes("Count"))),
-        App.globalPut(Bytes("Count"), scratchCount.load() + Int(1)),
+    transact = Seq([
+        # scratchCount.store(App.globalGet(Bytes("bDataSet"))),
+        # sub_assert_gtxn_safe(Int(0)), #Sell pair trade
+        # sub_assert_gtxn_safe(Int(1)), #Tx fee payment
+        sub_assert_gtxn_safe(Int(2)), #This application call
+        If(And(Gtxn[0].type_enum() == TxnType.AssetTransfer, App.globalGet(Bytes("Asa2ID")) != Int(1)), 
+            #THEN BRANCH -> IF ASSET 2 =/= ALGO
+            Seq([
+                Assert(sub_has_correct_assets_for_i(Int(2))),
+                scratchCount.store(Gtxn[0].asset_amount()),
+                Assert(And(
+                    Global.group_size() == Int(3),
+                    Gtxn[0].type_enum() == TxnType.AssetTransfer,                       #Provide Asset 2 for trade
+                    Gtxn[1].type_enum() == TxnType.Payment,                             #Provide Algo for tx fees
+                    Gtxn[2].type_enum() == TxnType.ApplicationCall,                     #
+                    Gtxn[0].asset_receiver() == Global.current_application_address(),   #Make sure the asset 2 receiver is this
+                    Gtxn[1].receiver() == Global.current_application_address(),         #Make sure the algo receiver is this
+                    and_assets_ok(Int(2)) == Int(1),
+                    Gtxn[2].assets[1] == Gtxn[0].xfer_asset(),                          #Make sure asset 2 is being supplied
+                    Gtxn[0].asset_amount() > Int(0),
+                    App.globalGet(Bytes("Asa2Amt")) >= Btoi(Gtxn[2].application_args[0]),
+                    scratchCount.load() % App.globalGet(Bytes("Asa2Div")) == Int(0),
+                    Gtxn[1].amount() == tx_min_fee,
+                    Gtxn[0].sender() == Gtxn[1].sender(),
+                    Gtxn[1].sender() == Gtxn[2].sender(),
+                    Gtxn[2].sender() == Gtxn[0].sender(),
+                )),
+            ]),
+            #ELSE BRANCH -> IF ASSET 2 == ALGO
+            Seq([
+                Assert(sub_has_correct_assets_for_i(Int(2))),
+                scratchCount.store(Gtxn[0].amount()),
+                Assert(And(
+                    Global.group_size() == Int(3),
+                    Gtxn[0].type_enum() == TxnType.Payment,                             #Provide Asset 1 for contract (Algo)
+                    Gtxn[1].type_enum() == TxnType.Payment,                             #Provide Algo for tx fees
+                    Gtxn[2].type_enum() == TxnType.ApplicationCall,                     #
+                    Gtxn[0].receiver() == Global.current_application_address(),         #Make sure the asset 1 receiver is this
+                    Gtxn[1].receiver() == Global.current_application_address(),         #Make sure the algo receiver is this
+                    and_assets_ok(Int(2)) == Int(1),                                           #Make sure asset 2 is being supplied
+                    App.globalGet(Bytes("Asa2ID")) == Int(1),                               #In this special case ALGO == ID 1
+                    Gtxn[0].amount() > Int(0),
+                    App.globalGet(Bytes("Asa2Amt")) >= Btoi(Gtxn[2].application_args[0]),
+                    scratchCount.load() % App.globalGet(Bytes("Asa2Div")) == Int(0),
+                    Gtxn[1].amount() == tx_min_fee,
+                    Gtxn[0].sender() == Gtxn[1].sender(),
+                    Gtxn[1].sender() == Gtxn[2].sender(),
+                    Gtxn[2].sender() == Gtxn[0].sender(),
+                ))
+            ])   
+        ),
+        #math check common props for both asset and transfer payment
+        Assert(Gtxn[2].application_args.length() == Int(5)),
+        App.globalPut(Bytes("Asa1Amt"), App.globalGet(Bytes("Asa1Amt")) - ((App.globalGet(Bytes("Asa2Div")) / scratchCount.load()) * App.globalGet(Bytes("Asa1Div")))),
+        App.globalPut(Bytes("Asa2Amt"), App.globalGet(Bytes("Asa1Amt")) - ((App.globalGet(Bytes("Asa2Div")) / scratchCount.load()) * App.globalGet(Bytes("Asa2Div")))),
+        If(And(Gtxn[0].type_enum() == TxnType.AssetTransfer, App.globalGet(Bytes("Asa2ID")) != Int(1)),
+            #THEN BRANCH -> IF ASSET 2 =/= ALGO
+            Seq(
+                InnerTxnBuilder().Begin(), 
+                InnerTxnBuilder().SetFields(
+                    {
+                        TxnField.type_enum: TxnType.AssetTransfer,
+                        TxnField.xfer_asset :  App.globalGet(Bytes("Asa1ID")),
+                        TxnField.asset_receiver: Gtxn[0].sender(),
+                        TxnField.asset_amount : (scratchCount.load() / App.globalGet(Bytes("Asa2Div"))) * App.globalGet(Bytes("Asa1Div")),
+                        TxnField.fee : tx_min_fee,
+                    }),
+                InnerTxnBuilder().Submit()
+            ),
+            #THEN BRANCH -> IF ASSET 2 == ALGO
+            Seq(
+                InnerTxnBuilder().Begin(), 
+                InnerTxnBuilder().SetFields(
+                    {
+                        TxnField.type_enum: TxnType.Payment,
+                        TxnField.receiver: Gtxn[0].sender(),
+                        TxnField.amount : (scratchCount.load() / App.globalGet(Bytes("Asa2Div"))) * App.globalGet(Bytes("Asa1Div")),
+                        TxnField.fee : tx_min_fee,
+                    }),
+                InnerTxnBuilder().Submit())
+            ),
         Return(Int(1))
     ])
 
@@ -99,91 +283,157 @@ def approval_program(asa1Id : int, asa2Id : int ):
         If(Txn.sender() == App.globalGet(Bytes("Creator")), Return(Int(1))),
         Return(Int(0))
     ])
-    #is_creator = Bytes('base64',encode_address(base64.b64decode(Txn.sender()))) == App.globalGet(Bytes("Closer"))
-
-    deduct = Seq([
-        scratchCount.store(App.globalGet(Bytes("Count"))),
-        If(scratchCount.load() > Int(0),
-            App.globalPut(Bytes("Count"), scratchCount.load() - Int(1)),
-            ),
-        Return(Int(1))
-    ])
 
     itxn = Seq([
+            sub_assert_gtxn_safe(Int(1)),
+            Assert(Txn.sender() == App.globalGet(Bytes("Creator"))),
+            Assert(And(
+                    Global.group_size() == Int(2),
+                    Gtxn[0].type_enum() == TxnType.Payment,             #Tx fees payment
+                    Gtxn[1].type_enum() == TxnType.ApplicationCall,     #Clean up call (this)
+                    Gtxn[0].sender() == Gtxn[1].sender(),
+                    Gtxn[1].sender() == App.globalGet(Bytes("Creator")),
+                    Gtxn[0].receiver() == Global.current_application_address(),
+                    Gtxn[0].amount() == (tx_min_fee) * Int(3)           #max 2 asset close-outs + algo close-out
+                    )),
             #Clear assets
-            InnerTxnBuilder().Begin(), 
-            InnerTxnBuilder().SetFields(
-                {
-                    TxnField.type_enum: TxnType.AssetTransfer,
-                    TxnField.xfer_asset :  App.globalGet(Bytes("Asa1ID")),
-                    TxnField.asset_receiver: App.globalGet(Bytes("Creator")),
-                    TxnField.asset_close_to : App.globalGet(Bytes("Creator")),
-                    }),
-            InnerTxnBuilder().Submit(),
-            InnerTxnBuilder().Begin(), 
+            If(App.globalGet(Bytes("Asa1ID")) != Int(1),
+                Seq([
+                    InnerTxnBuilder().Begin(), 
+                    InnerTxnBuilder().SetFields(
+                        {
+                            TxnField.type_enum: TxnType.AssetTransfer,
+                            TxnField.xfer_asset :  App.globalGet(Bytes("Asa1ID")),
+                            TxnField.asset_receiver: App.globalGet(Bytes("Creator")),
+                            TxnField.asset_close_to : App.globalGet(Bytes("Creator")),
+                            TxnField.fee : tx_min_fee,
+                        }),
+                    InnerTxnBuilder().Submit(),
+                ])
+            ),
+            If(App.globalGet(Bytes("Asa2ID")) != Int(1),
+                Seq([
+                    InnerTxnBuilder().Begin(), 
+                    InnerTxnBuilder().SetFields(
+                        {
+                            TxnField.type_enum: TxnType.AssetTransfer,
+                            TxnField.xfer_asset :  App.globalGet(Bytes("Asa2ID")),
+                            TxnField.asset_receiver: App.globalGet(Bytes("Creator")),
+                            TxnField.asset_close_to : App.globalGet(Bytes("Creator")),
+                            TxnField.fee : tx_min_fee,
+                        }),
+                    InnerTxnBuilder().Submit(),
+                ])
+            ), 
+            InnerTxnBuilder().Begin(),
             InnerTxnBuilder().SetFields(
                 {
                     TxnField.type_enum: TxnType.Payment,
                     TxnField.sender: Global.current_application_address(),
                     TxnField.receiver: App.globalGet(Bytes("Creator")),
                     TxnField.close_remainder_to :  App.globalGet(Bytes("Creator")),
-                    }),
+                    TxnField.fee : tx_min_fee,
+                }),
             InnerTxnBuilder().Submit(), 
-            Approve()
+            Return(Int(1))
         ])
-    
-    optin = Seq([ 
+
+    marker_clawback = AssetParam.clawback(Txn.assets[2])
+
+    test = Seq([
+        marker_clawback,
+        Assert(marker_clawback.hasValue()),
+        # sub_assert_gtxn_safe(Int(0)), 
+        # sub_assert_gtxn_safe(Int(1)), 
+        # sub_assert_gtxn_safe(Int(2)), 
+        sub_assert_gtxn_safe(Int(3)), 
+        Assert(
+            And(
+                Gtxn[0].type_enum() == TxnType.Payment,
+                Gtxn[1].type_enum() == TxnType.AssetFreeze,                       
+                Gtxn[2].type_enum() == TxnType.AssetTransfer,                             
+                Gtxn[3].type_enum() == TxnType.AssetFreeze, 
+
+                Gtxn[0].amount() == tx_min_fee * Int(2),  
+                Gtxn[1].freeze_asset_frozen() == Int(0),
+                Gtxn[1].freeze_asset() == Gtxn[2].xfer_asset(),                 #Make sure all transactions work with the same asset
+                Gtxn[3].freeze_asset() == Gtxn[2].xfer_asset(),  
+                Gtxn[2].xfer_asset() ==  App.globalGet(Bytes("MarkerId")),           
+                Gtxn[3].freeze_asset_frozen() == Int(1),
+                Gtxn[2].asset_amount() == Int(1),
+                Gtxn[0].sender() == App.globalGet(Bytes("Creator")),
+                Gtxn[0].receiver() == marker_clawback.value(),
+                Gtxn[1].sender() == marker_clawback.value(),
+                Gtxn[1].receiver() == App.globalGet(Bytes("Creator")),
+                Gtxn[2].sender() == App.globalGet(Bytes("Creator")),
+                Gtxn[2].receiver() == marker_clawback.value(),
+                Gtxn[3].sender() == marker_clawback.value(),
+                Gtxn[3].receiver() == App.globalGet(Bytes("Creator"))
+            )
+        ),
+        Return(Int(1))
+    ])
+
+    @Subroutine(TealType.none)
+    def sub_opt_in(id):
+        return Seq([
             InnerTxnBuilder().Begin(), 
             InnerTxnBuilder().SetFields(
                 {   
                     #Keep Sender empty for OptIn
                     TxnField.type_enum: TxnType.AssetTransfer,
                     TxnField.asset_receiver: Global.current_application_address(),
-                    TxnField.xfer_asset :  App.globalGet(Bytes("Asa1ID")),
+                    TxnField.xfer_asset :  id,
                     TxnField.asset_amount :  Int(0),
+                    TxnField.fee : tx_min_fee,
                     }),
-            InnerTxnBuilder().Submit(), 
-            Approve()
+            InnerTxnBuilder().Submit(),
         ])
 
-    assetDecimals = AssetParam.decimals(Txn.assets[0])
-
-    test = Seq([ 
-        assetDecimals,
-        Assert(assetDecimals.hasValue()),
-        Assert(assetDecimals.value() == Int(7)),
+    optin = Seq([
+        sub_assert_gtxn_safe(Int(1)),
+        Seq([
+            Assert(sub_has_correct_assets_for_i(Int(1))),
+            Assert(And(
+                Global.group_size() == Int(2),
+                Gtxn[0].type_enum() == TxnType.Payment,                             #Provide Algo for tx fees
+                Gtxn[1].type_enum() == TxnType.ApplicationCall,                     #
+                Gtxn[0].receiver() == Global.current_application_address(),         #Make sure the algo receiver is this
+                Gtxn[0].sender() == Gtxn[1].sender(),
+                Gtxn[1].sender() == App.globalGet(Bytes("Creator")),
+            )),
+            If(And(App.globalGet(Bytes("Asa1ID")) != Int(1),App.globalGet(Bytes("Asa2ID")) != Int(1)),
+                Assert(Gtxn[0].amount() == tx_act_fee + (tx_min_fee + tx_min_fee_opt) * Int(2)),
+                Assert(Gtxn[0].amount() == tx_act_fee + (tx_min_fee + tx_min_fee_opt))
+            )
+        ]),
+        If(App.globalGet(Bytes("Asa1ID")) != Int(1), 
+            sub_opt_in(App.globalGet(Bytes("Asa1ID")))
+        ),
+        If(App.globalGet(Bytes("Asa2ID")) != Int(1),
+            sub_opt_in(App.globalGet(Bytes("Asa2ID")))
+        ),
         Return(Int(1))
-        #Assert(AssetParam.decimals(Txn.assets[0]).value() == Int(6)),
-        #Return(Int(1))
-        #If(AssetParam.decimals(Int(0)).value() == Int(6), Return(Int(1))),
-        #Return(Int(0))
     ])
 
     handle_noop = Cond(
+        [Txn.application_args[4] == Bytes("OptIn")
+        , optin],
         [And(
-            Global.group_size() == Int(1),  # Make sure the transaction isn't grouped
-            Txn.application_args[0] == Bytes("Test")
+            Txn.application_args[4] == Bytes("Transact")
+        ), transact],
+        [And(
+            Txn.application_args[4] == Bytes("Test")
         ), test],
         [And(
-            Global.group_size() == Int(1),  # Make sure the transaction isn't grouped
-            Txn.application_args[0] == Bytes("OptIn")
-        ), optin],
-        [And(
-            Global.group_size() == Int(1),  # Make sure the transaction isn't grouped
-            Txn.application_args[0] == Bytes("ITxn")
+            #TODO: combine test with itxn
+            Txn.application_args[4] == Bytes("ITxn")
         ), itxn],
         [And(
             App.globalGet(Bytes("bDataSet")) == Int(0),
-            Txn.application_args[0] == Bytes("SetData")
-        ), dataSet],
-        [And(
-            Global.group_size() == Int(1),  # Make sure the transaction isn't grouped
-            Txn.application_args[0] == Bytes("Add")
-        ), add],
-        [And(
-            Global.group_size() == Int(1),
-            Txn.application_args[0] == Bytes("Deduct")
-        ), deduct],
+            Txn.application_args.length() == Int(5),
+            Txn.application_args[4] == Bytes("SetData")
+        ), dataSet]
     )
 
 
@@ -193,11 +443,28 @@ def approval_program(asa1Id : int, asa2Id : int ):
         [Txn.on_completion() == OnComplete.OptIn, handle_optin],
         [Txn.on_completion() == OnComplete.CloseOut, is_creator],
         [Txn.on_completion() == OnComplete.UpdateApplication, Return(Int(0))],
-        [Txn.on_completion() == OnComplete.DeleteApplication, itxn],
+        #[Txn.on_completion() == OnComplete.DeleteApplication, itxn],
+        [Txn.on_completion() == OnComplete.DeleteApplication, Return(Int(1))],
         [Txn.on_completion() == OnComplete.NoOp, handle_noop]
     )
     return compileTeal(program, Mode.Application, version=5)
 
+def b64len(b64str):
+    """
+    Calculate the length in bytes of a base64 string.
+    This function could decode the base64 string to a binary blob and count its
+    number of bytes with len(). But, that's inefficient and requires more
+    memory that really needed.
+    Base64 encodes three bytes to four characters. Sometimes, padding is added
+    in the form of one or two '=' characters.
+    So, the following formula allows to know the number of bytes of a base64
+    string without decoding it::
+        (3 * (length_in_chars / 4)) - (number_of_padding_chars)
+    :param str b64str: A base64 encoded string.
+    :return: Length, in bytes, of the binary blob encoded in base64.
+    :rtype: int
+    """
+    return (3 * (len(b64str) / 4)) - b64str[-2:].count('=')
 
 def clear_state_program():
     program = Return(Int(1))
@@ -207,6 +474,7 @@ def clear_state_program():
 # helper function to compile program source
 def compile_program(client, source_code):
     compile_response = client.compile(source_code)
+    len = b64len(compile_response['result'])
     return base64.b64decode(compile_response['result']), compile_response['hash']
 
 # user declared algod connection parameters. 
@@ -235,7 +503,7 @@ def app_schemas():
 
     return global_schema, local_schema
 
-def app_ready_to_go(algod : algod.AlgodClient, indexer : indexer.IndexerClient, creator_pk :str, source_addr : bytes):
+def app_ready_to_go(algod : algod.AlgodClient, indexer : indexer.IndexerClient, creator_pk :str, source_addr : bytes, args : dict):
     """A complete and ready to go compilation of the Satan app
 
     Args:
@@ -249,9 +517,12 @@ def app_ready_to_go(algod : algod.AlgodClient, indexer : indexer.IndexerClient, 
     """
     global_schema, local_schema = app_schemas()
 
+    Asa1ID = args['ASA1']
+    Asa2ID = args['ASA2']
+
     # compile program to TEAL assembly
     with open("./approval.teal", "w") as f:
-        approval_program_teal = approval_program()
+        approval_program_teal = approval_program(Asa2ID, Asa2ID)
         f.write(approval_program_teal)
 
     # compile program to TEAL assembly
@@ -267,91 +538,14 @@ def app_ready_to_go(algod : algod.AlgodClient, indexer : indexer.IndexerClient, 
 
     print("---------Generating args-----------")
     # configure registration and voting period
-    Asa1ID = 56335894
-    Asa2ID = 56335957
-
-    d1 = indexer.asset_info(Asa1ID)
-    d2 = indexer.asset_info(Asa2ID)
-    asaId1Decimals = d1['asset']['params']['decimals']
-    asaId2Decimals = d2['asset']['params']['decimals']
-
-    Asa1Prec = asaId1Decimals
-    Asa2Prec = asaId2Decimals
 
     # create list of bytes for app args
     app_args = [
         intToBytes(Asa1ID),
         intToBytes(Asa2ID),
-        intToBytes(Asa1Prec),
-        intToBytes(Asa2Prec),
-        source_addr
+        source_addr,
+        intToBytes(args['MARKER'])
     ]
 
 
-    return create_app(algod, indexer, creator_pk, approval_program_compiled, clear_state_program_compiled, global_schema, local_schema, app_args)
-
-def main() :
-    # initialize an algodClient
-    algod_client = algod.AlgodClient(algod_token, algod_address, headers={'User-Agent': 'py-algorand-sdk'})
-    algod_indexer_client = indexer.IndexerClient(algod_indexer_token, algod_indexer_address, headers={'User-Agent': 'py-algorand-sdk'})
-
-    creator_private_key = get_private_key_from_mnemonic(creator_mnemonic)
-
-    global_schema, local_schema = app_schemas()
-
-    # compile program to TEAL assembly
-    with open("./approval.teal", "w") as f:
-        approval_program_teal = approval_program()
-        f.write(approval_program_teal)
-
-    # compile program to TEAL assembly
-    with open("./clear.teal", "w") as f:
-        clear_state_program_teal = clear_state_program()
-        f.write(clear_state_program_teal)
-
-    # compile program to binary
-    approval_program_compiled, addr = compile_program(algod_client, approval_program_teal)
-    print("program address: ", addr)
-    
-    # compile program to binary
-    clear_state_program_compiled, _ = compile_program(algod_client, clear_state_program_teal)
-
-
-    print("---------Generating args-----------")
-
-
-    # configure registration and voting period
-    Asa1ID = 56335894
-    Asa2ID = 56335957
-
-    d1 = algod_indexer_client.asset_info(Asa1ID)
-    d2 = algod_indexer_client.asset_info(Asa2ID)
-    asaId1Decimals = d1['asset']['params']['decimals']
-    asaId2Decimals = d2['asset']['params']['decimals']
-
-    Asa1Prec = asaId1Decimals
-    Asa2Prec = asaId2Decimals
-
-    # create list of bytes for app args
-    app_args = [
-        intToBytes(Asa1ID),
-        intToBytes(Asa2ID),
-        intToBytes(Asa1Prec),
-        intToBytes(Asa2Prec),
-    ]
-
-    print("--------------------------------------------")
-    print("Updating application......")
-    
-    # create new application
-    #app_id = create_app(algod_client, algod_indexer_client, creator_private_key, approval_program_compiled, clear_state_program_compiled, global_schema, local_schema)
-    #app_id = update_app(algod_client, algod_indexer_client, app_id ,creator_private_key, approval_program_compiled, clear_state_program_compiled)
-    delete_app(algod_client, algod_indexer_client, app_id, creator_private_key)
-
-    # read global state of application
-    print("Global state:", read_global_state(algod_indexer_client ,account.address_from_private_key(creator_private_key), app_id))
-
-
-
-if __name__ == "__main__":
-    main()
+    return create_app(algod, indexer, creator_pk, approval_program_compiled, clear_state_program_compiled, global_schema, local_schema, app_args, args)
