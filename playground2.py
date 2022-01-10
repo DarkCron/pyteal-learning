@@ -46,6 +46,12 @@ def main():
     get_pair_marker_id(algod_indexer_client, asaId1, asaId2)
     marker_id = get_pair_marker_id(algod_indexer_client, asaId1, asaId2)
 
+    #send_marker_asset_with_clawback(algod_client, algod_indexer_client, marker_id, 'KTNKJPJHLBTVLHMPPR5GXJ37SCMGZQ3TTFAVVGVAU6IPEQRPUJO57T736Y', MARKER_PK())
+    # tx = tx_retrieve_marker_asset_with_clawback(algod_client, algod_indexer_client, marker_id, 'KTNKJPJHLBTVLHMPPR5GXJ37SCMGZQ3TTFAVVGVAU6IPEQRPUJO57T736Y', MARKER_PK())
+    # stx =tx.sign(MARKER_PK())
+    # tx_id = algod_client.send_transaction(stx)
+    # wait_for_confirmation(algod_client, tx_id, 5) 
+
     payer_address = 'KTNKJPJHLBTVLHMPPR5GXJ37SCMGZQ3TTFAVVGVAU6IPEQRPUJO57T736Y'
     payer_mnem = 'void hobby pyramid illness orphan arena blur service energy ranch welcome diesel behind become plastic only core audit rookie cage swap extra milk above mass'
     payer_private_key = get_private_key_from_mnemonic(payer_mnem)

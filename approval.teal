@@ -2,23 +2,23 @@
 txn ApplicationID
 int 0
 ==
-bnz main_l44
+bnz main_l33
 txn OnCompletion
 int OptIn
 ==
-bnz main_l43
+bnz main_l32
 txn OnCompletion
 int CloseOut
 ==
-bnz main_l40
+bnz main_l29
 txn OnCompletion
 int UpdateApplication
 ==
-bnz main_l39
+bnz main_l28
 txn OnCompletion
 int DeleteApplication
 ==
-bnz main_l38
+bnz main_l23
 txn OnCompletion
 int NoOp
 ==
@@ -28,19 +28,11 @@ main_l7:
 txna ApplicationArgs 4
 byte "OptIn"
 ==
-bnz main_l30
+bnz main_l22
 txna ApplicationArgs 4
 byte "Transact"
 ==
-bnz main_l23
-txna ApplicationArgs 4
-byte "Test"
-==
-bnz main_l22
-txna ApplicationArgs 4
-byte "ITxn"
-==
-bnz main_l17
+bnz main_l15
 byte "bDataSet"
 app_global_get
 int 0
@@ -53,16 +45,16 @@ txna ApplicationArgs 4
 byte "SetData"
 ==
 &&
-bnz main_l13
+bnz main_l11
 err
-main_l13:
+main_l11:
 int 1
 callsub sub2
 byte "Asa1ID"
 app_global_get
 int 1
 !=
-bnz main_l16
+bnz main_l14
 int 1
 callsub sub1
 assert
@@ -110,7 +102,7 @@ btoi
 ==
 &&
 assert
-main_l15:
+main_l13:
 gtxn 1 NumAppArgs
 int 5
 ==
@@ -195,7 +187,7 @@ int 1
 app_global_put
 int 1
 return
-main_l16:
+main_l14:
 int 1
 callsub sub1
 assert
@@ -242,219 +234,24 @@ btoi
 ==
 &&
 assert
-b main_l15
-main_l17:
-int 1
-callsub sub2
-txn Sender
-byte "Creator"
-app_global_get
-==
-assert
-global GroupSize
+b main_l13
+main_l15:
 int 2
-==
+callsub sub2
 gtxn 0 TypeEnum
-int pay
+int axfer
 ==
-&&
-gtxn 1 TypeEnum
-int appl
-==
-&&
-gtxn 0 Sender
-gtxn 1 Sender
-==
-&&
-gtxn 1 Sender
-byte "Creator"
-app_global_get
-==
-&&
-gtxn 0 Receiver
-global CurrentApplicationAddress
-==
-&&
-gtxn 0 Amount
-int 1000
-int 3
-*
-==
-&&
-assert
-byte "Asa1ID"
+byte "Asa2ID"
 app_global_get
 int 1
 !=
+&&
 bnz main_l21
-main_l18:
-byte "Asa2ID"
-app_global_get
-int 1
-!=
-bnz main_l20
-main_l19:
-itxn_begin
-int pay
-itxn_field TypeEnum
-global CurrentApplicationAddress
-itxn_field Sender
-byte "Creator"
-app_global_get
-itxn_field Receiver
-byte "Creator"
-app_global_get
-itxn_field CloseRemainderTo
-int 1000
-itxn_field Fee
-itxn_submit
-int 1
-return
-main_l20:
-itxn_begin
-int axfer
-itxn_field TypeEnum
-byte "Asa2ID"
-app_global_get
-itxn_field XferAsset
-byte "Creator"
-app_global_get
-itxn_field AssetReceiver
-byte "Creator"
-app_global_get
-itxn_field AssetCloseTo
-int 1000
-itxn_field Fee
-itxn_submit
-b main_l19
-main_l21:
-itxn_begin
-int axfer
-itxn_field TypeEnum
-byte "Asa1ID"
-app_global_get
-itxn_field XferAsset
-byte "Creator"
-app_global_get
-itxn_field AssetReceiver
-byte "Creator"
-app_global_get
-itxn_field AssetCloseTo
-int 1000
-itxn_field Fee
-itxn_submit
-b main_l18
-main_l22:
-txna Assets 2
-asset_params_get AssetClawback
-store 5
-store 6
-load 5
-assert
-int 3
-callsub sub2
-gtxn 0 TypeEnum
-int pay
-==
-gtxn 1 TypeEnum
-int afrz
-==
-&&
-gtxn 2 TypeEnum
-int axfer
-==
-&&
-gtxn 3 TypeEnum
-int afrz
-==
-&&
-gtxn 0 Amount
-int 1000
-int 2
-*
-==
-&&
-gtxn 1 FreezeAssetFrozen
-int 0
-==
-&&
-gtxn 1 FreezeAsset
-gtxn 2 XferAsset
-==
-&&
-gtxn 3 FreezeAsset
-gtxn 2 XferAsset
-==
-&&
-gtxn 2 XferAsset
-byte "MarkerId"
-app_global_get
-==
-&&
-gtxn 3 FreezeAssetFrozen
-int 1
-==
-&&
-gtxn 2 AssetAmount
-int 1
-==
-&&
-gtxn 0 Sender
-byte "Creator"
-app_global_get
-==
-&&
-gtxn 0 Receiver
-load 6
-==
-&&
-gtxn 1 Sender
-load 6
-==
-&&
-gtxn 1 Receiver
-byte "Creator"
-app_global_get
-==
-&&
-gtxn 2 Sender
-byte "Creator"
-app_global_get
-==
-&&
-gtxn 2 Receiver
-load 6
-==
-&&
-gtxn 3 Sender
-load 6
-==
-&&
-gtxn 3 Receiver
-byte "Creator"
-app_global_get
-==
-&&
-assert
-int 1
-return
-main_l23:
-int 2
-callsub sub2
-gtxn 0 TypeEnum
-int axfer
-==
-byte "Asa2ID"
-app_global_get
-int 1
-!=
-&&
-bnz main_l29
 int 2
 callsub sub1
 assert
 gtxn 0 Amount
-store 4
+store 6
 global GroupSize
 int 3
 ==
@@ -498,7 +295,7 @@ gtxna 2 ApplicationArgs 0
 btoi
 >=
 &&
-load 4
+load 6
 byte "Asa2Div"
 app_global_get
 %
@@ -522,7 +319,7 @@ gtxn 0 Sender
 ==
 &&
 assert
-main_l25:
+main_l17:
 gtxn 2 NumAppArgs
 int 5
 ==
@@ -532,7 +329,7 @@ byte "Asa1Amt"
 app_global_get
 byte "Asa2Div"
 app_global_get
-load 4
+load 6
 /
 byte "Asa1Div"
 app_global_get
@@ -544,7 +341,7 @@ byte "Asa1Amt"
 app_global_get
 byte "Asa2Div"
 app_global_get
-load 4
+load 6
 /
 byte "Asa2Div"
 app_global_get
@@ -559,13 +356,13 @@ app_global_get
 int 1
 !=
 &&
-bnz main_l28
+bnz main_l20
 itxn_begin
 int pay
 itxn_field TypeEnum
 gtxn 0 Sender
 itxn_field Receiver
-load 4
+load 6
 byte "Asa2Div"
 app_global_get
 /
@@ -576,10 +373,10 @@ itxn_field Amount
 int 1000
 itxn_field Fee
 itxn_submit
-main_l27:
+main_l19:
 int 1
 return
-main_l28:
+main_l20:
 itxn_begin
 int axfer
 itxn_field TypeEnum
@@ -588,7 +385,7 @@ app_global_get
 itxn_field XferAsset
 gtxn 0 Sender
 itxn_field AssetReceiver
-load 4
+load 6
 byte "Asa2Div"
 app_global_get
 /
@@ -599,13 +396,13 @@ itxn_field AssetAmount
 int 1000
 itxn_field Fee
 itxn_submit
-b main_l27
-main_l29:
+b main_l19
+main_l21:
 int 2
 callsub sub1
 assert
 gtxn 0 AssetAmount
-store 4
+store 6
 global GroupSize
 int 3
 ==
@@ -648,7 +445,7 @@ gtxna 2 ApplicationArgs 0
 btoi
 >=
 &&
-load 4
+load 6
 byte "Asa2Div"
 app_global_get
 %
@@ -672,114 +469,221 @@ gtxn 0 Sender
 ==
 &&
 assert
-b main_l25
-main_l30:
+b main_l17
+main_l22:
+callsub sub5
 int 1
+return
+main_l23:
+int 3
 callsub sub2
-int 1
-callsub sub1
-assert
-global GroupSize
-int 2
+txna Assets 2
+asset_params_get AssetClawback
+store 4
+store 5
+txn Sender
+byte "Creator"
+app_global_get
 ==
+assert
+load 4
+global GroupSize
+int 4
+==
+&&
+gtxn 3 TypeEnum
+int appl
+==
+&&
+gtxn 3 Sender
+byte "Creator"
+app_global_get
+==
+&&
 gtxn 0 TypeEnum
 int pay
 ==
 &&
 gtxn 1 TypeEnum
-int appl
+int pay
 ==
 &&
-gtxn 0 Receiver
-global CurrentApplicationAddress
+gtxn 2 TypeEnum
+int axfer
 ==
 &&
 gtxn 0 Sender
 gtxn 1 Sender
 ==
 &&
+gtxn 0 Receiver
+global CurrentApplicationAddress
+==
+&&
+gtxn 0 Amount
+int 1000
+int 3
+*
+==
+&&
+gtxn 1 Receiver
+load 5
+==
+&&
 gtxn 1 Sender
 byte "Creator"
 app_global_get
 ==
 &&
-assert
-byte "Asa1ID"
-app_global_get
-int 1
-!=
-byte "Asa2ID"
-app_global_get
-int 1
-!=
+gtxn 1 Amount
+int 1000
+==
 &&
-bnz main_l37
-gtxn 0 Amount
-int 100000
-int 1000
-int 100000
-+
-+
+gtxn 2 XferAsset
+byte "MarkerId"
+app_global_get
 ==
+&&
+gtxn 2 AssetSender
+byte "Creator"
+app_global_get
+==
+&&
+gtxn 2 AssetReceiver
+load 5
+==
+&&
+gtxn 2 AssetAmount
+int 1
+==
+&&
 assert
-main_l32:
 byte "Asa1ID"
 app_global_get
 int 1
 !=
-bnz main_l36
-main_l33:
+bnz main_l27
+main_l24:
 byte "Asa2ID"
 app_global_get
 int 1
 !=
-bnz main_l35
-main_l34:
+bnz main_l26
+main_l25:
+itxn_begin
+int pay
+itxn_field TypeEnum
+global CurrentApplicationAddress
+itxn_field Sender
+byte "Creator"
+app_global_get
+itxn_field Receiver
+byte "Creator"
+app_global_get
+itxn_field CloseRemainderTo
+int 1000
+itxn_field Fee
+itxn_submit
 int 1
 return
-main_l35:
+main_l26:
+itxn_begin
+int axfer
+itxn_field TypeEnum
 byte "Asa2ID"
 app_global_get
-callsub sub4
-b main_l34
-main_l36:
+itxn_field XferAsset
+byte "Creator"
+app_global_get
+itxn_field AssetReceiver
+byte "Creator"
+app_global_get
+itxn_field AssetCloseTo
+int 1000
+itxn_field Fee
+itxn_submit
+b main_l25
+main_l27:
+itxn_begin
+int axfer
+itxn_field TypeEnum
 byte "Asa1ID"
 app_global_get
-callsub sub4
-b main_l33
-main_l37:
-gtxn 0 Amount
-int 100000
+itxn_field XferAsset
+byte "Creator"
+app_global_get
+itxn_field AssetReceiver
+byte "Creator"
+app_global_get
+itxn_field AssetCloseTo
 int 1000
-int 100000
-+
-int 2
-*
-+
-==
-assert
-b main_l32
-main_l38:
-int 1
-return
-main_l39:
+itxn_field Fee
+itxn_submit
+b main_l24
+main_l28:
 int 0
 return
-main_l40:
+main_l29:
 txn Sender
 byte "Creator"
 app_global_get
 ==
-bnz main_l42
+bnz main_l31
 int 0
 return
-main_l42:
+main_l31:
 int 1
 return
-main_l43:
-int 0
+main_l32:
+txn Sender
+byte "Creator"
+app_global_get
+==
+assert
+int 1
 return
-main_l44:
+main_l33:
+int 2
+callsub sub2
+txna Assets 2
+asset_params_get AssetClawback
+store 4
+store 5
+load 4
+global GroupSize
+int 3
+==
+&&
+gtxn 1 TypeEnum
+int axfer
+==
+&&
+gtxn 1 XferAsset
+txna ApplicationArgs 3
+btoi
+==
+&&
+gtxn 1 AssetReceiver
+txna ApplicationArgs 2
+==
+&&
+gtxn 2 TypeEnum
+int pay
+==
+&&
+gtxn 2 Sender
+txna ApplicationArgs 2
+==
+&&
+gtxn 2 Receiver
+load 5
+==
+&&
+gtxn 2 Amount
+int 1000
+==
+&&
+assert
 txn NumAppArgs
 int 4
 ==
@@ -829,6 +733,9 @@ app_global_put
 byte "MarkerId"
 txna ApplicationArgs 3
 btoi
+app_global_put
+byte "Version"
+int 1
 app_global_put
 int 1
 return
@@ -888,6 +795,12 @@ byte "Asa2ID"
 app_global_get
 ==
 &&
+load 9
+gtxnsa Assets 2
+byte "MarkerId"
+app_global_get
+==
+&&
 retsub
 sub4: // sub_opt_in
 store 10
@@ -903,4 +816,88 @@ itxn_field AssetAmount
 int 1000
 itxn_field Fee
 itxn_submit
+retsub
+sub5: // sub_complete_opt_in
+int 1
+callsub sub2
+int 1
+callsub sub1
+assert
+global GroupSize
+int 2
+==
+gtxn 0 TypeEnum
+int pay
+==
+&&
+gtxn 1 TypeEnum
+int appl
+==
+&&
+gtxn 0 Receiver
+global CurrentApplicationAddress
+==
+&&
+gtxn 0 Sender
+gtxn 1 Sender
+==
+&&
+gtxn 1 Sender
+byte "Creator"
+app_global_get
+==
+&&
+assert
+byte "Asa1ID"
+app_global_get
+int 1
+!=
+byte "Asa2ID"
+app_global_get
+int 1
+!=
+&&
+bnz sub5_l6
+gtxn 0 Amount
+int 100000
+int 1000
+int 100000
++
++
+==
+assert
+sub5_l2:
+byte "Asa1ID"
+app_global_get
+int 1
+!=
+bnz sub5_l5
+sub5_l3:
+byte "Asa2ID"
+app_global_get
+int 1
+!=
+bz sub5_l7
+byte "Asa2ID"
+app_global_get
+callsub sub4
+b sub5_l7
+sub5_l5:
+byte "Asa1ID"
+app_global_get
+callsub sub4
+b sub5_l3
+sub5_l6:
+gtxn 0 Amount
+int 100000
+int 1000
+int 100000
++
+int 2
+*
++
+==
+assert
+b sub5_l2
+sub5_l7:
 retsub

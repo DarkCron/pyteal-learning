@@ -5,7 +5,7 @@ from algosdk import account, mnemonic
 from algosdk.future import transaction
 from algosdk.v2client import algod, indexer
 from pyteal.ast.itxn import InnerTxnActionExpr
-from utils.tealhelpher import create_app, delete_app, update_app, read_global_state, get_private_key_from_mnemonic, intToBytes
+from utils.tealhelpher import create_app, delete_app, update_app, read_global_state, get_private_key_from_mnemonic, intToBytes, OPT_IN_FEE, TX_FEE, ACT_FEE
 import base64
 import time
 import random
@@ -37,22 +37,7 @@ def approval_program(asa1Id : int, asa2Id : int ):
     asa1Id = Int(asa1Id)
     asa2Id = Int(asa2Id)
 
-    
-    # has_correct_assets = Assert(
-    #     And(
-    #         (Btoi(Txn.application_args[0]) == Txn.assets[0]),
-    #         (Btoi(Txn.application_args[1]) == Txn.assets[1]),
-    #         (Btoi(Txn.application_args[3]) == Txn.assets[2])
-    #     )
-    # )
-
-    # has_correct_assets = Assert(
-    #     And(
-    #         (Btoi(Txn.application_args[0]) == Txn.assets[0]),
-    #         (Btoi(Txn.application_args[1]) == Txn.assets[1]),
-    #         (Btoi(Txn.application_args[3]) == Txn.assets[2])
-    #     )
-    # )
+    VERSION = Int(1)
 
     @Subroutine(TealType.uint64)
     def sub_has_correct_assets():
@@ -73,22 +58,23 @@ def approval_program(asa1Id : int, asa2Id : int ):
     asa1Opt = AssetHolding.balance(Txn.sender(), asa1Id)
     asa2Opt = AssetHolding.balance(Txn.sender(), asa2Id)
 
-    tx_act_fee = Int(100000)
-    tx_min_fee = Int(1000)
-    tx_min_fee_opt = Int(100000)
+    tx_act_fee = Int(ACT_FEE)
+    tx_min_fee = Int(TX_FEE)
+    tx_min_fee_opt = Int(OPT_IN_FEE)
 
+    marker_clawback = AssetParam.clawback(Txn.assets[2])
     
-    # def assert_gtxn_safe(i : int):
-    #     return Assert(
-    #         And(
-    #             Gtxn[i].close_remainder_to() == Global.zero_address(),
-    #             Gtxn[i].asset_close_to() == Global.zero_address(),
-    #             Gtxn[i].rekey_to() == Global.zero_address(),
-    #             Gtxn[i].fee() <= tx_min_fee
-    #         ))
 
     @Subroutine(TealType.none)
     def sub_assert_gtxn_safe(i : Int):
+        """Check Gtxn[0] through Gtxn[i] if they're safe
+
+        Args:
+            i (Int): [description]
+
+        Returns:
+            [type]: [description]
+        """
         scratchCount.store(Int(0)),
         While(scratchCount.load() <= i).Do(
             Seq(
@@ -108,6 +94,21 @@ def approval_program(asa1Id : int, asa2Id : int ):
         return Assert(Int(1) == Int(1))
     
     handle_creation = Seq([
+        sub_assert_gtxn_safe(Int(2)),
+        marker_clawback,
+        Assert(
+            And(
+                marker_clawback.hasValue(),
+                Global.group_size() == Int(3),
+                #Gtxn[0].type_enum() == TxnType.ApplicationCall,     #Should be this create call, mustn't be check
+                Gtxn[1].type_enum() == TxnType.AssetTransfer,
+                Gtxn[1].xfer_asset() == Btoi(Txn.application_args[3]),
+                Gtxn[1].asset_receiver() ==  Txn.application_args[2],
+                Gtxn[2].type_enum() == TxnType.Payment,
+                Gtxn[2].sender() == Txn.application_args[2],
+                Gtxn[2].receiver() == marker_clawback.value(),
+                Gtxn[2].amount() == tx_min_fee
+        )),
         Assert(Txn.application_args.length() == Int(4)),
         Assert(sub_has_correct_assets()),
         asa1Opt,
@@ -122,10 +123,14 @@ def approval_program(asa1Id : int, asa2Id : int ):
         App.globalPut(Bytes("Creator"), Txn.application_args[2]),
         App.globalPut(Bytes("bDataSet"), Int(0)),
         App.globalPut(Bytes("MarkerId"), Btoi(Txn.application_args[3])),
+        App.globalPut(Bytes("Version"), VERSION),
         Return(Int(1))
     ])
 
-    handle_optin = Return(Int(0))
+    handle_optin = Seq([
+        Assert(Txn.sender() ==  App.globalGet(Bytes("Creator"))),
+        Return(Int(1))
+    ])
 
     scratchCount = ScratchVar(TealType.uint64)
 
@@ -134,6 +139,7 @@ def approval_program(asa1Id : int, asa2Id : int ):
         return And(
             Gtxn[i].assets[0] == App.globalGet(Bytes("Asa1ID")),
             Gtxn[i].assets[1] == App.globalGet(Bytes("Asa2ID")),
+            Gtxn[i].assets[2] == App.globalGet(Bytes("MarkerId")),
         )
 
     dataSet = Seq([
@@ -285,16 +291,27 @@ def approval_program(asa1Id : int, asa2Id : int ):
     ])
 
     itxn = Seq([
-            sub_assert_gtxn_safe(Int(1)),
+            sub_assert_gtxn_safe(Int(3)),
+            marker_clawback,
             Assert(Txn.sender() == App.globalGet(Bytes("Creator"))),
             Assert(And(
-                    Global.group_size() == Int(2),
+                    marker_clawback.hasValue(),
+                    Global.group_size() == Int(4),
+                    Gtxn[3].type_enum() == TxnType.ApplicationCall,     #Clean up call (this)
+                    Gtxn[3].sender() == App.globalGet(Bytes("Creator")),
                     Gtxn[0].type_enum() == TxnType.Payment,             #Tx fees payment
-                    Gtxn[1].type_enum() == TxnType.ApplicationCall,     #Clean up call (this)
+                    Gtxn[1].type_enum() == TxnType.Payment,             #Tx fees payment to clawback
+                    Gtxn[2].type_enum() == TxnType.AssetTransfer,       #Clawback action of Marker asset
                     Gtxn[0].sender() == Gtxn[1].sender(),
-                    Gtxn[1].sender() == App.globalGet(Bytes("Creator")),
                     Gtxn[0].receiver() == Global.current_application_address(),
-                    Gtxn[0].amount() == (tx_min_fee) * Int(3)           #max 2 asset close-outs + algo close-out
+                    Gtxn[0].amount() == (tx_min_fee) * Int(3),           #max 2 asset close-outs + algo close-out
+                    Gtxn[1].receiver() == marker_clawback.value(),
+                    Gtxn[1].sender() == App.globalGet(Bytes("Creator")),
+                    Gtxn[1].amount() == tx_min_fee,
+                    Gtxn[2].xfer_asset() == App.globalGet(Bytes("MarkerId")),
+                    Gtxn[2].asset_sender() == App.globalGet(Bytes("Creator")),
+                    Gtxn[2].asset_receiver() == marker_clawback.value(),
+                    Gtxn[2].asset_amount() == Int(1)
                     )),
             #Clear assets
             If(App.globalGet(Bytes("Asa1ID")) != Int(1),
@@ -338,42 +355,6 @@ def approval_program(asa1Id : int, asa2Id : int ):
             Return(Int(1))
         ])
 
-    marker_clawback = AssetParam.clawback(Txn.assets[2])
-
-    test = Seq([
-        marker_clawback,
-        Assert(marker_clawback.hasValue()),
-        # sub_assert_gtxn_safe(Int(0)), 
-        # sub_assert_gtxn_safe(Int(1)), 
-        # sub_assert_gtxn_safe(Int(2)), 
-        sub_assert_gtxn_safe(Int(3)), 
-        Assert(
-            And(
-                Gtxn[0].type_enum() == TxnType.Payment,
-                Gtxn[1].type_enum() == TxnType.AssetFreeze,                       
-                Gtxn[2].type_enum() == TxnType.AssetTransfer,                             
-                Gtxn[3].type_enum() == TxnType.AssetFreeze, 
-
-                Gtxn[0].amount() == tx_min_fee * Int(2),  
-                Gtxn[1].freeze_asset_frozen() == Int(0),
-                Gtxn[1].freeze_asset() == Gtxn[2].xfer_asset(),                 #Make sure all transactions work with the same asset
-                Gtxn[3].freeze_asset() == Gtxn[2].xfer_asset(),  
-                Gtxn[2].xfer_asset() ==  App.globalGet(Bytes("MarkerId")),           
-                Gtxn[3].freeze_asset_frozen() == Int(1),
-                Gtxn[2].asset_amount() == Int(1),
-                Gtxn[0].sender() == App.globalGet(Bytes("Creator")),
-                Gtxn[0].receiver() == marker_clawback.value(),
-                Gtxn[1].sender() == marker_clawback.value(),
-                Gtxn[1].receiver() == App.globalGet(Bytes("Creator")),
-                Gtxn[2].sender() == App.globalGet(Bytes("Creator")),
-                Gtxn[2].receiver() == marker_clawback.value(),
-                Gtxn[3].sender() == marker_clawback.value(),
-                Gtxn[3].receiver() == App.globalGet(Bytes("Creator"))
-            )
-        ),
-        Return(Int(1))
-    ])
-
     @Subroutine(TealType.none)
     def sub_opt_in(id):
         return Seq([
@@ -390,31 +371,39 @@ def approval_program(asa1Id : int, asa2Id : int ):
             InnerTxnBuilder().Submit(),
         ])
 
-    optin = Seq([
-        sub_assert_gtxn_safe(Int(1)),
-        Seq([
-            Assert(sub_has_correct_assets_for_i(Int(1))),
-            Assert(And(
-                Global.group_size() == Int(2),
-                Gtxn[0].type_enum() == TxnType.Payment,                             #Provide Algo for tx fees
-                Gtxn[1].type_enum() == TxnType.ApplicationCall,                     #
-                Gtxn[0].receiver() == Global.current_application_address(),         #Make sure the algo receiver is this
-                Gtxn[0].sender() == Gtxn[1].sender(),
-                Gtxn[1].sender() == App.globalGet(Bytes("Creator")),
-            )),
-            If(And(App.globalGet(Bytes("Asa1ID")) != Int(1),App.globalGet(Bytes("Asa2ID")) != Int(1)),
-                Assert(Gtxn[0].amount() == tx_act_fee + (tx_min_fee + tx_min_fee_opt) * Int(2)),
-                Assert(Gtxn[0].amount() == tx_act_fee + (tx_min_fee + tx_min_fee_opt))
+    @Subroutine(TealType.none)
+    def sub_complete_opt_in():
+        return Seq([
+            sub_assert_gtxn_safe(Int(1)),
+            Seq([
+                Assert(sub_has_correct_assets_for_i(Int(1))),
+                Assert(And(
+                    Global.group_size() == Int(2),
+                    Gtxn[0].type_enum() == TxnType.Payment,                             #Provide Algo for tx fees
+                    Gtxn[1].type_enum() == TxnType.ApplicationCall,                     #
+                    Gtxn[0].receiver() == Global.current_application_address(),         #Make sure the algo receiver is this
+                    Gtxn[0].sender() == Gtxn[1].sender(),
+                    Gtxn[1].sender() == App.globalGet(Bytes("Creator")),
+                )),
+                If(And(App.globalGet(Bytes("Asa1ID")) != Int(1),App.globalGet(Bytes("Asa2ID")) != Int(1)),
+                    Assert(Gtxn[0].amount() == tx_act_fee + (tx_min_fee + tx_min_fee_opt) * Int(2)),
+                    Assert(Gtxn[0].amount() == tx_act_fee + (tx_min_fee + tx_min_fee_opt))
+                )
+            ]),
+            If(App.globalGet(Bytes("Asa1ID")) != Int(1), 
+                sub_opt_in(App.globalGet(Bytes("Asa1ID")))
+            ),
+            If(App.globalGet(Bytes("Asa2ID")) != Int(1),
+                sub_opt_in(App.globalGet(Bytes("Asa2ID")))
             )
-        ]),
-        If(App.globalGet(Bytes("Asa1ID")) != Int(1), 
-            sub_opt_in(App.globalGet(Bytes("Asa1ID")))
-        ),
-        If(App.globalGet(Bytes("Asa2ID")) != Int(1),
-            sub_opt_in(App.globalGet(Bytes("Asa2ID")))
-        ),
-        Return(Int(1))
-    ])
+        ])
+
+    optin = Seq(
+        [
+            sub_complete_opt_in(),
+            Return(Int(1))
+        ]
+    )
 
     handle_noop = Cond(
         [Txn.application_args[4] == Bytes("OptIn")
@@ -422,13 +411,6 @@ def approval_program(asa1Id : int, asa2Id : int ):
         [And(
             Txn.application_args[4] == Bytes("Transact")
         ), transact],
-        [And(
-            Txn.application_args[4] == Bytes("Test")
-        ), test],
-        [And(
-            #TODO: combine test with itxn
-            Txn.application_args[4] == Bytes("ITxn")
-        ), itxn],
         [And(
             App.globalGet(Bytes("bDataSet")) == Int(0),
             Txn.application_args.length() == Int(5),
@@ -443,8 +425,8 @@ def approval_program(asa1Id : int, asa2Id : int ):
         [Txn.on_completion() == OnComplete.OptIn, handle_optin],
         [Txn.on_completion() == OnComplete.CloseOut, is_creator],
         [Txn.on_completion() == OnComplete.UpdateApplication, Return(Int(0))],
-        #[Txn.on_completion() == OnComplete.DeleteApplication, itxn],
-        [Txn.on_completion() == OnComplete.DeleteApplication, Return(Int(1))],
+        [Txn.on_completion() == OnComplete.DeleteApplication, itxn],
+        #[Txn.on_completion() == OnComplete.DeleteApplication, Return(Int(1))],
         [Txn.on_completion() == OnComplete.NoOp, handle_noop]
     )
     return compileTeal(program, Mode.Application, version=5)

@@ -33,9 +33,9 @@ def main() :
     print("Calling SetData application......")
     asaId1 = 56335894
     asaId2 = 56335957
-    app_id = 57614685
+    app_id = 57829980
     #delete_app(algod_client, algod_indexer_client, app_id, creator_private_key)
-    
+
 
     create_marker(algod_client, algod_indexer_client, asaId1, asaId2)
     get_pair_marker_id(algod_indexer_client, asaId1, asaId2)
@@ -50,8 +50,12 @@ def main() :
     args['NOOP'] = ''
     args['TRANSACT'] = 495
     #transact_command(algod_client, algod_indexer_client, app_id, buyer_addr, args, buyer_pk)
-
+    opt_in_app_command(algod_client, algod_indexer_client, app_id, creator_addr, args, creator_private_key)
+    close_out_app_command(algod_client, algod_indexer_client, app_id, creator_addr, args, creator_private_key)
     opt_in_command(algod_client, algod_indexer_client, app_id, creator_addr, args, creator_private_key)
+
+    delete_app_command(algod_client, algod_indexer_client, app_id, creator_addr, args, creator_private_key)
+
     data_set_command(algod_client, algod_indexer_client, app_id, creator_addr, args, creator_private_key)
     transact_command(algod_client, algod_indexer_client, app_id, buyer_addr, args, buyer_pk)
 

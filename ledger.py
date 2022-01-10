@@ -16,6 +16,9 @@ def get_private_key_from_mnemonic(mn) :
     private_key = mnemonic.to_private_key(mn)
     return private_key
 
+def MARKER_PK():
+    return mnemonic.to_private_key(MARKER_MNEM)
+
 # helper function that waits for a given txid to be confirmed by the network
 def wait_for_confirmation(client: algod.AlgodClient, transaction_id, timeout):
     """
@@ -116,6 +119,9 @@ def freeze(client : algod.AlgodClient, indexer: indexer.IndexerClient, asaId : i
     return
 
 def create_marker(client : algod.AlgodClient, indexer: indexer.IndexerClient, asaId1 : int, asaId2 : int):
+    if (asaId1, asaId2) in MARKER_DICT:
+        return
+    
     MARKER_ACT_INFO = indexer.account_info(MARKER_ADDR)
     found_marker_asa = False
     hash_to_find_marker = (checksum(b'asa1'+(asaId1).to_bytes(8, 'big')+b'asa2'+(asaId2).to_bytes(8, 'big')))

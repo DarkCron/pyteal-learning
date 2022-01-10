@@ -1,3 +1,4 @@
+from ledger import *
 from algosdk import future
 from algosdk.encoding import decode_address, encode_address, checksum
 from pyteal import *
@@ -10,6 +11,15 @@ import base64
 import time
 
 from pyteal.ast import addr
+
+ACT_FEE = 100000
+OPT_IN_FEE = 100000
+TX_FEE = 1000
+
+def tx_fee_payment(client : algod.AlgodClient, sender_addr, receiver_addr, fee_amt : int):
+    params = client.suggested_params()
+    txn = transaction.PaymentTxn(sender_addr, params, receiver_addr, fee_amt)
+    return txn
 
 def get_address_from_app_id(app_id):
     return algosdk.encoding.encode_address(checksum(b'appID'+(app_id).to_bytes(8, 'big')))
@@ -203,15 +213,32 @@ def create_app(client : algod.AlgodClient, indexer: indexer.IndexerClient, priva
     txn = transaction.ApplicationCreateTxn(sender, params, on_complete, \
                                             approval_program, clear_program, \
                                             global_schema, local_schema, app_args, foreign_assets=[args['ASA1'], args['ASA2'], args['MARKER']])
-    # sign transaction
-    signed_txn = txn.sign(private_key)
-    tx_id = signed_txn.transaction.get_txid()
-    
-    # send transaction
-    client.send_transactions([signed_txn])
 
-    # await confirmation
-    wait_for_confirmation(client, tx_id, 5)
+    tx_marker_xfer = tx_send_marker_asset_with_clawback(client, indexer, get_pair_marker_id(client, args['ASA1'], args['ASA2']), sender, MARKER_PK())
+    tx_fee = tx_fee_payment(client, sender, MARKER_ADDR, TX_FEE)
+
+    txs = [txn, tx_marker_xfer, tx_fee]
+
+    gid = transaction.calculate_group_id(txs)
+    for tx in txs:
+        tx.group = gid
+    
+    stxns = [txs[0].sign(private_key), txs[1].sign(MARKER_PK()), txs[2].sign(private_key)]
+
+    tx_id = client.send_transactions(stxns)
+
+    # wait for confirmation
+    wait_for_confirmation(client, tx_id, 5) 
+
+    # # sign transaction
+    # signed_txn = txn.sign(private_key)
+    # tx_id = signed_txn.transaction.get_txid()
+    
+    # # send transaction
+    # client.send_transactions([signed_txn])
+
+    # # await confirmation
+    # wait_for_confirmation(client, tx_id, 5)
 
     #!!!!!!!! Must be gotten from indexer 
     # display results
@@ -467,3 +494,26 @@ def create_payment_noop_group(client : algod.AlgodClient, indexer : indexer.Inde
     wait_for_confirmation(client, tx_id, 5) 
 
     return []
+
+def send_marker_asset_with_clawback(client : algod.AlgodClient, indexer : indexer.IndexerClient, asset_id, receiver, clawback_pk):
+    params = client.suggested_params()
+    
+    txn = transaction.AssetTransferTxn(account.address_from_private_key(clawback_pk), params, receiver, 1, asset_id, revocation_target=account.address_from_private_key(clawback_pk))
+    stxn = txn.sign(clawback_pk)
+    tx_id = client.send_transaction(stxn)
+    # wait for confirmation
+    wait_for_confirmation(client, tx_id, 5) 
+
+    return
+
+def tx_send_marker_asset_with_clawback(client : algod.AlgodClient, indexer : indexer.IndexerClient, asset_id, receiver, clawback_pk):
+    params = client.suggested_params()
+    
+    txn = transaction.AssetTransferTxn(account.address_from_private_key(clawback_pk), params, receiver, 1, asset_id, revocation_target=account.address_from_private_key(clawback_pk))
+    return txn
+
+def tx_retrieve_marker_asset_with_clawback(client : algod.AlgodClient, indexer : indexer.IndexerClient, asset_id, take_asset_from_addr, clawback_pk):
+    params = client.suggested_params()
+    
+    txn = transaction.AssetTransferTxn(account.address_from_private_key(clawback_pk), params, account.address_from_private_key(clawback_pk), 1, asset_id, revocation_target=take_asset_from_addr)
+    return txn
