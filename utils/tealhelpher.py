@@ -21,6 +21,15 @@ def tx_fee_payment(client : algod.AlgodClient, sender_addr, receiver_addr, fee_a
     txn = transaction.PaymentTxn(sender_addr, params, receiver_addr, fee_amt)
     return txn
 
+def fee_amt_for_send_data(args : dict):
+    cost = TX_FEE + ACT_FEE
+    if args['ASA1'] != 1:
+        cost += OPT_IN_FEE
+    if args['ASA2'] != 1:
+        cost += OPT_IN_FEE
+        cost += TX_FEE
+    return cost
+
 def get_address_from_app_id(app_id):
     return algosdk.encoding.encode_address(checksum(b'appID'+(app_id).to_bytes(8, 'big')))
 
@@ -205,6 +214,7 @@ def create_app(client : algod.AlgodClient, indexer: indexer.IndexerClient, priva
 
     # declare on_complete as NoOp
     on_complete = transaction.OnComplete.NoOpOC.real
+    on_complete = transaction.OnComplete.OptInOC.real
 
     # get node suggested parameters
     params = client.suggested_params()

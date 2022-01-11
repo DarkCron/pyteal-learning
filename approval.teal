@@ -55,27 +55,22 @@ app_global_get
 int 1
 !=
 bnz main_l14
-int 1
+int 0
 callsub sub1
 assert
 global GroupSize
 int 2
 ==
-gtxn 0 TypeEnum
+gtxn 1 TypeEnum
 int pay
 ==
 &&
-gtxn 1 TypeEnum
+gtxn 0 TypeEnum
 int appl
 ==
 &&
-gtxn 0 Receiver
+gtxn 1 Receiver
 global CurrentApplicationAddress
-==
-&&
-int 1
-callsub sub3
-int 1
 ==
 &&
 byte "Asa1ID"
@@ -83,153 +78,154 @@ app_global_get
 int 1
 ==
 &&
-gtxn 0 Amount
+gtxn 1 Amount
 int 0
 >
 &&
-gtxn 0 Sender
 gtxn 1 Sender
+gtxn 0 Sender
 ==
 &&
-gtxn 1 Sender
+gtxn 0 Sender
 byte "Creator"
 app_global_get
 ==
 &&
-gtxn 0 Amount
-gtxna 1 ApplicationArgs 0
+gtxn 1 Amount
+gtxna 0 ApplicationArgs 0
 btoi
 ==
 &&
 assert
 main_l13:
-gtxn 1 NumAppArgs
+gtxn 0 NumAppArgs
 int 5
 ==
-gtxna 1 ApplicationArgs 0
+gtxna 0 ApplicationArgs 0
 btoi
 int 0
 >
 &&
-gtxna 1 ApplicationArgs 1
+gtxna 0 ApplicationArgs 1
 btoi
 int 0
 >
 &&
-gtxna 1 ApplicationArgs 2
+gtxna 0 ApplicationArgs 2
 btoi
 int 0
 >
 &&
-gtxna 1 ApplicationArgs 3
+gtxna 0 ApplicationArgs 3
 btoi
 int 0
 >
 &&
-gtxna 1 ApplicationArgs 0
+gtxna 0 ApplicationArgs 0
 btoi
-gtxna 1 ApplicationArgs 2
+gtxna 0 ApplicationArgs 2
 btoi
 %
 int 0
 ==
 &&
-gtxna 1 ApplicationArgs 1
+gtxna 0 ApplicationArgs 1
 btoi
-gtxna 1 ApplicationArgs 0
+gtxna 0 ApplicationArgs 0
 btoi
-gtxna 1 ApplicationArgs 2
+gtxna 0 ApplicationArgs 2
 btoi
 /
 %
 int 0
 ==
 &&
-gtxna 1 ApplicationArgs 1
+gtxna 0 ApplicationArgs 1
 btoi
-gtxna 1 ApplicationArgs 3
+gtxna 0 ApplicationArgs 3
 btoi
 %
 int 0
 ==
 &&
-gtxna 1 ApplicationArgs 0
+gtxna 0 ApplicationArgs 0
 btoi
-gtxna 1 ApplicationArgs 3
+gtxna 0 ApplicationArgs 3
 btoi
 *
-gtxna 1 ApplicationArgs 2
+gtxna 0 ApplicationArgs 2
 btoi
 /
-gtxna 1 ApplicationArgs 1
+gtxna 0 ApplicationArgs 1
 btoi
 ==
 &&
 assert
 byte "Asa1Amt"
-gtxna 1 ApplicationArgs 0
+gtxna 0 ApplicationArgs 0
 btoi
 app_global_put
 byte "Asa2Amt"
-gtxna 1 ApplicationArgs 1
+gtxna 0 ApplicationArgs 1
 btoi
 app_global_put
 byte "Asa1Div"
-gtxna 1 ApplicationArgs 2
+gtxna 0 ApplicationArgs 2
 btoi
 app_global_put
 byte "Asa2Div"
-gtxna 1 ApplicationArgs 3
+gtxna 0 ApplicationArgs 3
 btoi
 app_global_put
 byte "bDataSet"
 int 1
 app_global_put
+byte "Asa1ID"
+app_global_get
+callsub sub3
+byte "Asa2ID"
+app_global_get
+callsub sub3
 int 1
 return
 main_l14:
-int 1
+int 0
 callsub sub1
 assert
 global GroupSize
 int 2
 ==
-gtxn 0 TypeEnum
+gtxn 1 TypeEnum
 int axfer
 ==
 &&
-gtxn 1 TypeEnum
+gtxn 0 TypeEnum
 int appl
 ==
 &&
-gtxn 0 AssetReceiver
+gtxn 1 AssetReceiver
 global CurrentApplicationAddress
 ==
 &&
-int 1
-callsub sub3
-int 1
+gtxna 0 Assets 0
+gtxn 1 XferAsset
 ==
 &&
-gtxna 1 Assets 0
-gtxn 0 XferAsset
-==
-&&
-gtxn 0 AssetAmount
+gtxn 1 AssetAmount
 int 0
 >
 &&
-gtxn 0 Sender
 gtxn 1 Sender
+gtxn 0 Sender
 ==
 &&
-gtxn 1 Sender
+gtxn 0 Sender
 byte "Creator"
 app_global_get
 ==
 &&
-gtxn 0 AssetAmount
-gtxna 1 ApplicationArgs 0
+gtxn 1 AssetAmount
+gtxna 0 ApplicationArgs 0
 btoi
 ==
 &&
@@ -276,7 +272,7 @@ global CurrentApplicationAddress
 ==
 &&
 int 2
-callsub sub3
+callsub sub5
 int 1
 ==
 &&
@@ -427,7 +423,7 @@ global CurrentApplicationAddress
 ==
 &&
 int 2
-callsub sub3
+callsub sub5
 int 1
 ==
 &&
@@ -471,7 +467,7 @@ gtxn 0 Sender
 assert
 b main_l17
 main_l22:
-callsub sub5
+callsub sub4
 int 1
 return
 main_l23:
@@ -759,14 +755,24 @@ sub1: // sub_has_correct_assets_for_i
 store 7
 byte "Asa1ID"
 app_global_get
+int 1
+==
+byte "Asa1ID"
+app_global_get
 load 7
 gtxnsa Assets 0
+==
+||
+byte "Asa2ID"
+app_global_get
+int 1
 ==
 byte "Asa2ID"
 app_global_get
 load 7
 gtxnsa Assets 1
 ==
+||
 &&
 byte "MarkerId"
 app_global_get
@@ -782,34 +788,14 @@ int 1
 ==
 assert
 retsub
-sub3: // and_assets_ok
+sub3: // sub_opt_in
 store 9
-load 9
-gtxnsa Assets 0
-byte "Asa1ID"
-app_global_get
-==
-load 9
-gtxnsa Assets 1
-byte "Asa2ID"
-app_global_get
-==
-&&
-load 9
-gtxnsa Assets 2
-byte "MarkerId"
-app_global_get
-==
-&&
-retsub
-sub4: // sub_opt_in
-store 10
 itxn_begin
 int axfer
 itxn_field TypeEnum
 global CurrentApplicationAddress
 itxn_field AssetReceiver
-load 10
+load 9
 itxn_field XferAsset
 int 0
 itxn_field AssetAmount
@@ -817,7 +803,7 @@ int 1000
 itxn_field Fee
 itxn_submit
 retsub
-sub5: // sub_complete_opt_in
+sub4: // sub_complete_opt_in
 int 1
 callsub sub2
 int 1
@@ -857,7 +843,7 @@ app_global_get
 int 1
 !=
 &&
-bnz sub5_l6
+bnz sub4_l6
 gtxn 0 Amount
 int 100000
 int 1000
@@ -866,28 +852,28 @@ int 100000
 +
 ==
 assert
-sub5_l2:
+sub4_l2:
 byte "Asa1ID"
 app_global_get
 int 1
 !=
-bnz sub5_l5
-sub5_l3:
+bnz sub4_l5
+sub4_l3:
 byte "Asa2ID"
 app_global_get
 int 1
 !=
-bz sub5_l7
+bz sub4_l7
 byte "Asa2ID"
 app_global_get
-callsub sub4
-b sub5_l7
-sub5_l5:
+callsub sub3
+b sub4_l7
+sub4_l5:
 byte "Asa1ID"
 app_global_get
-callsub sub4
-b sub5_l3
-sub5_l6:
+callsub sub3
+b sub4_l3
+sub4_l6:
 gtxn 0 Amount
 int 100000
 int 1000
@@ -898,6 +884,26 @@ int 2
 +
 ==
 assert
-b sub5_l2
-sub5_l7:
+b sub4_l2
+sub4_l7:
+retsub
+sub5: // and_assets_ok
+store 10
+load 10
+gtxnsa Assets 0
+byte "Asa1ID"
+app_global_get
+==
+load 10
+gtxnsa Assets 1
+byte "Asa2ID"
+app_global_get
+==
+&&
+load 10
+gtxnsa Assets 2
+byte "MarkerId"
+app_global_get
+==
+&&
 retsub
