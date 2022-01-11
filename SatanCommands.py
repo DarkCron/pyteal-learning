@@ -112,13 +112,14 @@ def data_set_command(client : algod.AlgodClient, indexer : indexer.IndexerClient
     args['NOOP_INDEX'] = NOOP_INDICES[args['NOOP']]
     txs = []
 
+    txs.append(tx_application_call(client, sender_addr,app_id, args))
+
     if args['ASA1'] != 1:
         txs.append(tx_transfer_asset(client, sender_addr, receiver_addr, args))
     elif args['ASA1'] == 1:
         txs.append(tx_transfer_algo(client, sender_addr, receiver_addr, args))
     else:
         raise Exception() 
-    txs.append(tx_application_call(client, sender_addr,app_id, args))
 
     send_command(client, txs, sender_pk)
     return
